@@ -39,6 +39,24 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
+    // Auto-advance status rules
+    let finalStatus: string = review_status ?? 'pending';
+    if (finalStatus === 'sample_at_hq') {
+      finalStatus = 'under_qc';
+    } else if (
+      (finalStatus === 'under_qc' || finalStatus === 'qc_done') &&
+      size_check === true &&
+      fit_trial_done === true &&
+      size_issue_found === false &&
+      debit_note_raised !== null &&
+      debit_note_raised !== undefined &&
+      remarks && String(remarks).trim() !== ''
+    ) {
+      finalStatus = 'under_catalog';
+    } else if (finalStatus === 'catalog_done') {
+      finalStatus = 'size_chart_revision';
+    }
+
     const result = await pool.query(
       `UPDATE sku_reviews SET
         size_check               = $1,
@@ -62,7 +80,7 @@ export async function PATCH(
         remarks ?? null,
         description_updated ?? null,
         description_update_notes ?? null,
-        review_status ?? 'pending',
+        finalStatus,
         size_chart_update ? JSON.stringify(size_chart_update) : null,
         userId,
         id,

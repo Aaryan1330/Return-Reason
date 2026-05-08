@@ -35,10 +35,11 @@ const PLUS_SIZES: { key: keyof SkuReview; label: string }[] = [
   { key: 'xl6_return', label: '6XL' },
 ];
 
-const TOP_WEAR_COLS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL', '6XL'];
-const BOTTOM_WEAR_COLS = ['28', '30', '32', '34', '36', '38'];
-const TOP_WEAR_ROWS = ['Chest', 'Length', 'Shoulder', 'Sleeve'];
-const BOTTOM_WEAR_ROWS = ['Hip', 'Inseam', 'Outseam', 'Waist'];
+// Size chart constants — sizes are ROWS, measurements are COLUMNS
+const TOP_WEAR_SIZES    = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL', '6XL'];
+const TOP_WEAR_MEAS     = ['Chest', 'Length', 'Shoulders', 'Sleeve'];
+const BOTTOM_WEAR_SIZES = ['28', '30', '32', '34', '36', '38', '40', '42', '44', '46', '48', '50'];
+const BOTTOM_WEAR_MEAS  = ['Hip', 'Inseam', 'Outseam', 'Waist'];
 
 const BOTTOM_KEYWORDS = ['DENIM', 'JEAN', 'TROUSER', 'JOGGER', 'SHORT', 'CHINO', 'PANT', 'BOTTOM'];
 
@@ -47,6 +48,45 @@ function isBottomWear(category: string | null): boolean {
   const upper = category.toUpperCase();
   return BOTTOM_KEYWORDS.some((kw) => upper.includes(kw));
 }
+
+function buildEmptyChart(sizes: string[], measurements: string[]): SizeChartData {
+  const chart: SizeChartData = {};
+  for (const size of sizes) {
+    chart[size] = {};
+    for (const meas of measurements) {
+      chart[size][meas] = '';
+    }
+  }
+  return chart;
+}
+
+// Compute what status will be auto-advanced to on save (mirrors server logic)
+function computeAutoStatus(
+  status: ReviewStatus,
+  size_check: BoolVal,
+  fit_trial_done: BoolVal,
+  size_issue_found: BoolVal,
+  debit_note_raised: BoolVal,
+  remarks: string,
+): ReviewStatus | null {
+  if (status === 'sample_at_hq') return 'under_qc';
+  if (
+    (status === 'under_qc' || status === 'qc_done') &&
+    size_check === true &&
+    fit_trial_done === true &&
+    size_issue_found === false &&
+    debit_note_raised !== null &&
+    remarks.trim() !== ''
+  ) return 'under_catalog';
+  if (status === 'catalog_done') return 'size_chart_revision';
+  return null;
+}
+
+const AUTO_STATUS_LABELS: Partial<Record<ReviewStatus, string>> = {
+  under_qc:          'Under QC',
+  under_catalog:     'Under Catalog Review',
+  size_chart_revision: 'Size Chart Revision',
+};
 
 function YesNoToggle({
   label,
@@ -93,31 +133,19 @@ function YesNoToggle({
   );
 }
 
-function buildEmptyChart(cols: string[], rows: string[]): SizeChartData {
-  const chart: SizeChartData = {};
-  for (const row of rows) {
-    chart[row] = {};
-    for (const col of cols) {
-      chart[row][col] = '';
-    }
-  }
-  return chart;
-}
-
 function SizeChartMatrix({
-  cols,
-  rows,
+  sizes,
+  measurements,
   data,
   onChange,
 }: {
-  cols: string[];
-  rows: string[];
+  sizes: string[];
+  measurements: string[];
   data: SizeChartData;
   onChange: (d: SizeChartData) => void;
 }) {
-  const update = (row: string, col: string, val: string) => {
-    const next = { ...data, [row]: { ...data[row], [col]: val } };
-    onChange(next);
+  const update = (size: string, meas: string, val: string) => {
+    onChange({ ...data, [size]: { ...data[size], [meas]: val } });
   };
 
   return (
@@ -125,24 +153,24 @@ function SizeChartMatrix({
       <table className="text-xs w-full border-collapse">
         <thead>
           <tr>
-            <th className="text-left px-2 py-1.5 font-semibold text-gray-500 w-20"></th>
-            {cols.map((col) => (
-              <th key={col} className="px-1 py-1.5 font-bold text-gray-700 text-center min-w-[52px]">
-                {col}
+            <th className="text-left px-2 py-1.5 font-semibold text-gray-500 w-14"></th>
+            {measurements.map((m) => (
+              <th key={m} className="px-1 py-1.5 font-bold text-gray-700 text-center min-w-[70px]">
+                {m}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row} className="border-t border-gray-100">
-              <td className="px-2 py-1.5 font-semibold text-gray-600 whitespace-nowrap">{row}</td>
-              {cols.map((col) => (
-                <td key={col} className="px-1 py-1">
+          {sizes.map((size) => (
+            <tr key={size} className="border-t border-gray-100">
+              <td className="px-2 py-1 font-bold text-gray-700 whitespace-nowrap">{size}</td>
+              {measurements.map((meas) => (
+                <td key={meas} className="px-1 py-1">
                   <input
                     type="text"
-                    value={data[row]?.[col] ?? ''}
-                    onChange={(e) => update(row, col, e.target.value)}
+                    value={data[size]?.[meas] ?? ''}
+                    onChange={(e) => update(size, meas, e.target.value)}
                     placeholder="—"
                     className="w-full text-center border border-gray-200 rounded-lg px-1 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-600 bg-white"
                   />
@@ -157,16 +185,18 @@ function SizeChartMatrix({
 }
 
 export default function EditModal({ sku, saving, onClose, onSave }: Props) {
-  const isPlus = sku.l1_category === 'plus';
+  const isPlus       = sku.l1_category === 'plus';
   const defaultBottom = isBottomWear(sku.category);
   const [garmentType, setGarmentType] = useState<'top' | 'bottom'>(defaultBottom ? 'bottom' : 'top');
 
-  const chartCols = garmentType === 'bottom' ? BOTTOM_WEAR_COLS : (isPlus ? TOP_WEAR_COLS.slice(6) : TOP_WEAR_COLS.slice(0, 6));
-  const chartRows = garmentType === 'bottom' ? BOTTOM_WEAR_ROWS : TOP_WEAR_ROWS;
+  const chartSizes = garmentType === 'bottom' ? BOTTOM_WEAR_SIZES : TOP_WEAR_SIZES;
+  const chartMeas  = garmentType === 'bottom' ? BOTTOM_WEAR_MEAS  : TOP_WEAR_MEAS;
 
   const initChart = (): SizeChartData => {
-    if (sku.size_chart_update) return sku.size_chart_update as SizeChartData;
-    return buildEmptyChart(chartCols, chartRows);
+    if (sku.size_chart_update && Object.keys(sku.size_chart_update).length > 0) {
+      return sku.size_chart_update as SizeChartData;
+    }
+    return buildEmptyChart(chartSizes, chartMeas);
   };
 
   const [form, setForm] = useState({
@@ -193,13 +223,23 @@ export default function EditModal({ sku, saving, onClose, onSave }: Props) {
   const sizes = isPlus ? PLUS_SIZES : REGULAR_SIZES;
   const hasSizeData = sizes.some((s) => sku[s.key] !== null && sku[s.key] !== undefined);
 
-  const handleChartChange = (d: SizeChartData) => setForm((prev) => ({ ...prev, size_chart_update: d }));
+  const autoStatus = computeAutoStatus(
+    form.review_status,
+    form.size_check,
+    form.fit_trial_done,
+    form.size_issue_found,
+    form.debit_note_raised,
+    form.remarks,
+  );
+
+  const handleChartChange = (d: SizeChartData) =>
+    setForm((prev) => ({ ...prev, size_chart_update: d }));
 
   const handleGarmentTypeChange = (type: 'top' | 'bottom') => {
     setGarmentType(type);
-    const newCols = type === 'bottom' ? BOTTOM_WEAR_COLS : (isPlus ? TOP_WEAR_COLS.slice(6) : TOP_WEAR_COLS.slice(0, 6));
-    const newRows = type === 'bottom' ? BOTTOM_WEAR_ROWS : TOP_WEAR_ROWS;
-    setForm((prev) => ({ ...prev, size_chart_update: buildEmptyChart(newCols, newRows) }));
+    const newSizes = type === 'bottom' ? BOTTOM_WEAR_SIZES : TOP_WEAR_SIZES;
+    const newMeas  = type === 'bottom' ? BOTTOM_WEAR_MEAS  : TOP_WEAR_MEAS;
+    setForm((prev) => ({ ...prev, size_chart_update: buildEmptyChart(newSizes, newMeas) }));
   };
 
   return (
@@ -327,6 +367,17 @@ export default function EditModal({ sku, saving, onClose, onSave }: Props) {
                   <option value="complete">Complete</option>
                 </optgroup>
               </select>
+
+              {/* Auto-advance banner */}
+              {autoStatus && (
+                <div className="mt-2 flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 text-sm text-emerald-800">
+                  <span className="text-base">→</span>
+                  <span>
+                    Saving will automatically advance status to{' '}
+                    <strong>{AUTO_STATUS_LABELS[autoStatus]}</strong>
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* ── Size & Fit ── */}
@@ -354,7 +405,7 @@ export default function EditModal({ sku, saving, onClose, onSave }: Props) {
               />
             </div>
 
-            {/* ── Size Chart Matrix (shown when size issue found) ── */}
+            {/* ── Size Chart Matrix (shown when size issue found = yes) ── */}
             {form.size_issue_found === true && (
               <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -390,8 +441,8 @@ export default function EditModal({ sku, saving, onClose, onSave }: Props) {
                   Enter corrected measurements (cm) for each size.
                 </p>
                 <SizeChartMatrix
-                  cols={chartCols}
-                  rows={chartRows}
+                  sizes={chartSizes}
+                  measurements={chartMeas}
                   data={form.size_chart_update}
                   onChange={handleChartChange}
                 />
