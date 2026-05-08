@@ -85,11 +85,11 @@ export default function SkuTable({ skus, onEdit }: Props) {
                   {sku.return_pct != null ? (
                     <span
                       className={
-                        sku.return_pct >= 35
+                        sku.return_pct > 15
                           ? 'text-red-600'
-                          : sku.return_pct >= 25
+                          : sku.return_pct >= 10
                           ? 'text-yellow-600'
-                          : 'text-gray-700'
+                          : 'text-gray-900'
                       }
                     >
                       {sku.return_pct}%
