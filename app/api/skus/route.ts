@@ -11,21 +11,30 @@ function getMondayOfWeek(date: Date = new Date()): string {
   return d.toISOString().split('T')[0];
 }
 
-// GET /api/skus — used by the dashboard client-side refresh
+function parseNum(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return isNaN(n) ? null : n;
+}
+
+// GET /api/skus
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
+  const skuType = searchParams.get('type') ?? 'weekly';
   const week = searchParams.get('week');
   const status = searchParams.get('status');
   const category = searchParams.get('category');
 
   const params: unknown[] = [];
   let idx = 1;
-  let where = 'WHERE 1=1';
+  let where = `WHERE sr.type = $${idx}`;
+  params.push(skuType);
+  idx++;
 
-  if (week) {
+  if (skuType === 'weekly' && week) {
     const weekEnd = new Date(week + 'T00:00:00');
     weekEnd.setDate(weekEnd.getDate() + 7);
     where += ` AND sr.week_date >= $${idx} AND sr.week_date < $${idx + 1}`;
@@ -58,8 +67,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/skus — called by your backend to insert the weekly SKU list
-// Requires the INTERNAL_API_KEY header
+// POST /api/skus — called by backend with INTERNAL_API_KEY
 export async function POST(request: NextRequest) {
   const apiKey = request.headers.get('x-api-key');
   if (!apiKey || apiKey !== process.env.INTERNAL_API_KEY) {
@@ -68,21 +76,46 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-
-    // Accept a single object or an array
     const items: unknown[] = Array.isArray(body) ? body : [body];
     const inserted: unknown[] = [];
 
     for (const item of items as any[]) {
-      const { sku_group, category, return_pct, online_inventory, image_url, week_date } = item;
+      const {
+        sku_group, category, l1_category, vendor,
+        return_pct, online_inventory, total_inventory,
+        image_url, week_date, type,
+        xs_return, s_return, m_return, l_return, xl_return, xxl_return,
+        xl3_return, xl4_return, xl5_return, xl6_return,
+      } = item;
+
       if (!sku_group) continue;
 
-      const wDate = week_date ?? getMondayOfWeek();
       const result = await pool.query(
-        `INSERT INTO sku_reviews (sku_group, category, return_pct, online_inventory, image_url, week_date)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING *`,
-        [sku_group, category ?? null, return_pct ?? null, online_inventory ?? null, image_url ?? null, wDate]
+        `INSERT INTO sku_reviews (
+          sku_group, category, l1_category, vendor,
+          return_pct, online_inventory, total_inventory,
+          image_url, week_date, type,
+          xs_return, s_return, m_return, l_return, xl_return, xxl_return,
+          xl3_return, xl4_return, xl5_return, xl6_return
+        ) VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+          $11,$12,$13,$14,$15,$16,$17,$18,$19,$20
+        ) RETURNING *`,
+        [
+          sku_group,
+          category ?? null,
+          l1_category ?? null,
+          vendor || null,
+          parseNum(typeof return_pct === 'string' ? return_pct.replace('%', '') : return_pct),
+          parseNum(online_inventory),
+          parseNum(total_inventory),
+          image_url ?? null,
+          week_date ?? getMondayOfWeek(),
+          type ?? 'weekly',
+          parseNum(xs_return), parseNum(s_return), parseNum(m_return),
+          parseNum(l_return), parseNum(xl_return), parseNum(xxl_return),
+          parseNum(xl3_return), parseNum(xl4_return), parseNum(xl5_return), parseNum(xl6_return),
+        ]
       );
       inserted.push(result.rows[0]);
     }

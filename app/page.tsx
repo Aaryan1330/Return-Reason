@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import pool from '@/lib/db';
-import { SkuReview } from '@/types';
+import { SkuReview, SkuType } from '@/types';
 import Dashboard from '@/components/Dashboard';
 
 function getMondayOfWeek(dateStr?: string): string {
@@ -13,16 +13,26 @@ function getMondayOfWeek(dateStr?: string): string {
   return d.toISOString().split('T')[0];
 }
 
-async function getSkusForWeek(weekStart: string): Promise<SkuReview[]> {
-  const weekEnd = new Date(weekStart + 'T00:00:00');
-  weekEnd.setDate(weekEnd.getDate() + 7);
+async function getSkus(type: SkuType, weekStart?: string): Promise<SkuReview[]> {
+  if (type === 'repeat') {
+    const result = await pool.query(
+      `SELECT sr.*, u.name AS last_updated_by_name
+       FROM sku_reviews sr
+       LEFT JOIN users u ON sr.last_updated_by = u.id
+       WHERE sr.type = 'repeat'
+       ORDER BY sr.return_pct DESC NULLS LAST`
+    );
+    return result.rows;
+  }
 
+  const weekEnd = new Date(weekStart! + 'T00:00:00');
+  weekEnd.setDate(weekEnd.getDate() + 7);
   const result = await pool.query(
     `SELECT sr.*, u.name AS last_updated_by_name
      FROM sku_reviews sr
      LEFT JOIN users u ON sr.last_updated_by = u.id
-     WHERE sr.week_date >= $1 AND sr.week_date < $2
-     ORDER BY sr.return_pct DESC NULLS LAST, sr.created_at DESC`,
+     WHERE sr.type = 'weekly' AND sr.week_date >= $1 AND sr.week_date < $2
+     ORDER BY sr.return_pct DESC NULLS LAST`,
     [weekStart, weekEnd.toISOString().split('T')[0]]
   );
   return result.rows;
@@ -30,17 +40,19 @@ async function getSkusForWeek(weekStart: string): Promise<SkuReview[]> {
 
 async function getAvailableWeeks(): Promise<string[]> {
   const result = await pool.query(
-    `SELECT DISTINCT week_date FROM sku_reviews ORDER BY week_date DESC LIMIT 20`
+    `SELECT DISTINCT week_date FROM sku_reviews
+     WHERE type = 'weekly'
+     ORDER BY week_date DESC LIMIT 20`
   );
-  return result.rows.map((r: any) => {
-    const d = new Date(r.week_date);
-    return d.toISOString().split('T')[0];
-  });
+  return result.rows.map((r: any) => new Date(r.week_date).toISOString().split('T')[0]);
 }
 
-async function getCategories(): Promise<string[]> {
+async function getCategories(type: SkuType): Promise<string[]> {
   const result = await pool.query(
-    `SELECT DISTINCT category FROM sku_reviews WHERE category IS NOT NULL ORDER BY category`
+    `SELECT DISTINCT category FROM sku_reviews
+     WHERE type = $1 AND category IS NOT NULL
+     ORDER BY category`,
+    [type]
   );
   return result.rows.map((r: any) => r.category);
 }
@@ -48,25 +60,29 @@ async function getCategories(): Promise<string[]> {
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: { week?: string };
+  searchParams: { week?: string; type?: string };
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/login');
 
+  const skuType: SkuType = searchParams.type === 'repeat' ? 'repeat' : 'weekly';
   const weekStart = getMondayOfWeek(searchParams.week);
+
   const [skus, availableWeeks, categories] = await Promise.all([
-    getSkusForWeek(weekStart),
-    getAvailableWeeks(),
-    getCategories(),
+    getSkus(skuType, weekStart),
+    skuType === 'weekly' ? getAvailableWeeks() : Promise.resolve([]),
+    getCategories(skuType),
   ]);
 
-  const weeksToShow = availableWeeks.includes(weekStart)
-    ? availableWeeks
-    : [weekStart, ...availableWeeks];
+  const weeksToShow =
+    skuType === 'weekly' && !availableWeeks.includes(weekStart)
+      ? [weekStart, ...availableWeeks]
+      : availableWeeks;
 
   return (
     <Dashboard
       initialSkus={skus}
+      skuType={skuType}
       currentWeek={weekStart}
       availableWeeks={weeksToShow}
       categories={categories}
