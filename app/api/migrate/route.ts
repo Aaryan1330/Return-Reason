@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
     `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS xl5_return INTEGER`,
     `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS xl6_return INTEGER`,
     `CREATE INDEX IF NOT EXISTS idx_sku_reviews_type ON sku_reviews(type)`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS size_chart_update JSONB`,
   ];
 
   try {

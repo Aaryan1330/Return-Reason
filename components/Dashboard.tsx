@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { SkuReview, SkuType, SummaryStats } from '@/types';
+import { SkuReview, SkuType, SummaryStats, TEAM_STATUSES } from '@/types';
 import SummaryCards from './SummaryCards';
 import SkuTable from './SkuTable';
 import EditModal from './EditModal';
@@ -18,13 +18,15 @@ interface Props {
 }
 
 function computeStats(skus: SkuReview[]): SummaryStats {
+  const inTeam = (team: keyof typeof TEAM_STATUSES) =>
+    skus.filter((s) => (TEAM_STATUSES[team] as readonly string[]).includes(s.review_status)).length;
   return {
-    total: skus.length,
-    pending: skus.filter((s) => s.review_status === 'pending').length,
-    in_review: skus.filter((s) => s.review_status === 'in_review').length,
-    action_taken: skus.filter((s) => s.review_status === 'action_taken').length,
-    resolved: skus.filter((s) => s.review_status === 'resolved').length,
-    escalated: skus.filter((s) => s.review_status === 'escalated').length,
+    total:     skus.length,
+    warehouse: inTeam('warehouse'),
+    qc:        inTeam('qc'),
+    catalog:   inTeam('catalog'),
+    tech:      inTeam('tech'),
+    complete:  skus.filter((s) => s.review_status === 'complete').length,
   };
 }
 
@@ -75,7 +77,7 @@ export default function Dashboard({
   const router = useRouter();
   const [skus, setSkus] = useState<SkuReview[]>(initialSkus);
   const [selectedSku, setSelectedSku] = useState<SkuReview | null>(null);
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterTeam, setFilterTeam] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
@@ -83,7 +85,10 @@ export default function Dashboard({
   const stats = computeStats(skus);
 
   const filtered = skus.filter((s) => {
-    if (filterStatus !== 'all' && s.review_status !== filterStatus) return false;
+    if (filterTeam !== 'all') {
+      const teamStatuses = TEAM_STATUSES[filterTeam as keyof typeof TEAM_STATUSES] as readonly string[];
+      if (!teamStatuses.includes(s.review_status)) return false;
+    }
     if (filterCategory !== 'all' && s.category !== filterCategory) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -204,18 +209,6 @@ export default function Dashboard({
               className="border border-gray-200 rounded-xl px-4 py-2 text-sm bg-white w-56 focus:outline-none focus:ring-2 focus:ring-gray-700"
             />
             <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="border border-gray-200 rounded-xl px-4 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-700"
-            >
-              <option value="all">All Statuses</option>
-              <option value="pending">Not Started</option>
-              <option value="in_review">Under Review</option>
-              <option value="action_taken">Action Taken</option>
-              <option value="resolved">Resolved</option>
-              <option value="escalated">Escalated</option>
-            </select>
-            <select
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
               className="border border-gray-200 rounded-xl px-4 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-700"
@@ -224,6 +217,17 @@ export default function Dashboard({
               {categories.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
+            </select>
+            <select
+              value={filterTeam}
+              onChange={(e) => setFilterTeam(e.target.value)}
+              className="border border-gray-200 rounded-xl px-4 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-700"
+            >
+              <option value="all">All Products</option>
+              <option value="warehouse">Warehouse</option>
+              <option value="qc">QC</option>
+              <option value="catalog">Catalog</option>
+              <option value="tech">Tech</option>
             </select>
             <span className="text-sm text-gray-400 ml-auto">
               {filtered.length} of {skus.length} items

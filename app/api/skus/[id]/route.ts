@@ -26,9 +26,15 @@ export async function PATCH(
       description_updated,
       description_update_notes,
       review_status,
+      size_chart_update,
     } = await request.json();
 
-    const valid = ['pending', 'in_review', 'action_taken', 'resolved', 'escalated'];
+    const valid = [
+      'pending', 'sample_ordered', 'sample_at_hq',
+      'under_qc', 'qc_done',
+      'under_catalog', 'catalog_done',
+      'size_chart_revision', 'complete',
+    ];
     if (review_status && !valid.includes(review_status)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
@@ -43,9 +49,10 @@ export async function PATCH(
         description_updated      = $6,
         description_update_notes = $7,
         review_status            = $8,
-        last_updated_by          = $9,
+        size_chart_update        = $9,
+        last_updated_by          = $10,
         last_updated_at          = NOW()
-       WHERE id = $10
+       WHERE id = $11
        RETURNING *`,
       [
         size_check ?? null,
@@ -56,6 +63,7 @@ export async function PATCH(
         description_updated ?? null,
         description_update_notes ?? null,
         review_status ?? 'pending',
+        size_chart_update ? JSON.stringify(size_chart_update) : null,
         userId,
         id,
       ]
@@ -65,7 +73,6 @@ export async function PATCH(
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    // Fetch with joined user name
     const full = await pool.query(
       `SELECT sr.*, u.name AS last_updated_by_name
        FROM sku_reviews sr

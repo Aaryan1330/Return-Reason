@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { SkuReview, ReviewStatus } from '@/types';
+import { SkuReview, ReviewStatus, SizeChartData } from '@/types';
 
 interface Props {
   sku: SkuReview;
@@ -12,7 +12,6 @@ interface Props {
 
 type BoolVal = boolean | null;
 
-// Conditional formatting thresholds
 function sizeColor(value: number | null): string {
   if (value === null || value === undefined) return 'bg-gray-100 text-gray-400';
   if (value < 7) return 'bg-green-100 text-green-700';
@@ -35,6 +34,19 @@ const PLUS_SIZES: { key: keyof SkuReview; label: string }[] = [
   { key: 'xl5_return', label: '5XL' },
   { key: 'xl6_return', label: '6XL' },
 ];
+
+const TOP_WEAR_COLS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL', '6XL'];
+const BOTTOM_WEAR_COLS = ['28', '30', '32', '34', '36', '38'];
+const TOP_WEAR_ROWS = ['Chest', 'Length', 'Shoulder', 'Sleeve'];
+const BOTTOM_WEAR_ROWS = ['Hip', 'Inseam', 'Outseam', 'Waist'];
+
+const BOTTOM_KEYWORDS = ['DENIM', 'JEAN', 'TROUSER', 'JOGGER', 'SHORT', 'CHINO', 'PANT', 'BOTTOM'];
+
+function isBottomWear(category: string | null): boolean {
+  if (!category) return false;
+  const upper = category.toUpperCase();
+  return BOTTOM_KEYWORDS.some((kw) => upper.includes(kw));
+}
 
 function YesNoToggle({
   label,
@@ -81,16 +93,92 @@ function YesNoToggle({
   );
 }
 
+function buildEmptyChart(cols: string[], rows: string[]): SizeChartData {
+  const chart: SizeChartData = {};
+  for (const row of rows) {
+    chart[row] = {};
+    for (const col of cols) {
+      chart[row][col] = '';
+    }
+  }
+  return chart;
+}
+
+function SizeChartMatrix({
+  cols,
+  rows,
+  data,
+  onChange,
+}: {
+  cols: string[];
+  rows: string[];
+  data: SizeChartData;
+  onChange: (d: SizeChartData) => void;
+}) {
+  const update = (row: string, col: string, val: string) => {
+    const next = { ...data, [row]: { ...data[row], [col]: val } };
+    onChange(next);
+  };
+
+  return (
+    <div className="overflow-x-auto -mx-1">
+      <table className="text-xs w-full border-collapse">
+        <thead>
+          <tr>
+            <th className="text-left px-2 py-1.5 font-semibold text-gray-500 w-20"></th>
+            {cols.map((col) => (
+              <th key={col} className="px-1 py-1.5 font-bold text-gray-700 text-center min-w-[52px]">
+                {col}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row} className="border-t border-gray-100">
+              <td className="px-2 py-1.5 font-semibold text-gray-600 whitespace-nowrap">{row}</td>
+              {cols.map((col) => (
+                <td key={col} className="px-1 py-1">
+                  <input
+                    type="text"
+                    value={data[row]?.[col] ?? ''}
+                    onChange={(e) => update(row, col, e.target.value)}
+                    placeholder="—"
+                    className="w-full text-center border border-gray-200 rounded-lg px-1 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-600 bg-white"
+                  />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function EditModal({ sku, saving, onClose, onSave }: Props) {
+  const isPlus = sku.l1_category === 'plus';
+  const defaultBottom = isBottomWear(sku.category);
+  const [garmentType, setGarmentType] = useState<'top' | 'bottom'>(defaultBottom ? 'bottom' : 'top');
+
+  const chartCols = garmentType === 'bottom' ? BOTTOM_WEAR_COLS : (isPlus ? TOP_WEAR_COLS.slice(6) : TOP_WEAR_COLS.slice(0, 6));
+  const chartRows = garmentType === 'bottom' ? BOTTOM_WEAR_ROWS : TOP_WEAR_ROWS;
+
+  const initChart = (): SizeChartData => {
+    if (sku.size_chart_update) return sku.size_chart_update as SizeChartData;
+    return buildEmptyChart(chartCols, chartRows);
+  };
+
   const [form, setForm] = useState({
-    size_check: sku.size_check,
-    size_issue_found: sku.size_issue_found,
-    fit_trial_done: sku.fit_trial_done,
-    debit_note_raised: sku.debit_note_raised,
-    remarks: sku.remarks ?? '',
-    description_updated: sku.description_updated,
+    size_check:               sku.size_check,
+    fit_trial_done:           sku.fit_trial_done,
+    size_issue_found:         sku.size_issue_found,
+    debit_note_raised:        sku.debit_note_raised,
+    remarks:                  sku.remarks ?? '',
+    description_updated:      sku.description_updated,
     description_update_notes: sku.description_update_notes ?? '',
-    review_status: sku.review_status,
+    review_status:            sku.review_status,
+    size_chart_update:        initChart(),
   });
 
   useEffect(() => {
@@ -102,9 +190,17 @@ export default function EditModal({ sku, saving, onClose, onSave }: Props) {
   const set = (field: string) => (v: unknown) =>
     setForm((prev) => ({ ...prev, [field]: v }));
 
-  const isPlus = sku.l1_category === 'plus';
   const sizes = isPlus ? PLUS_SIZES : REGULAR_SIZES;
   const hasSizeData = sizes.some((s) => sku[s.key] !== null && sku[s.key] !== undefined);
+
+  const handleChartChange = (d: SizeChartData) => setForm((prev) => ({ ...prev, size_chart_update: d }));
+
+  const handleGarmentTypeChange = (type: 'top' | 'bottom') => {
+    setGarmentType(type);
+    const newCols = type === 'bottom' ? BOTTOM_WEAR_COLS : (isPlus ? TOP_WEAR_COLS.slice(6) : TOP_WEAR_COLS.slice(0, 6));
+    const newRows = type === 'bottom' ? BOTTOM_WEAR_ROWS : TOP_WEAR_ROWS;
+    setForm((prev) => ({ ...prev, size_chart_update: buildEmptyChart(newCols, newRows) }));
+  };
 
   return (
     <div
@@ -186,7 +282,6 @@ export default function EditModal({ sku, saving, onClose, onSave }: Props) {
                     );
                   })}
                 </div>
-                {/* Legend */}
                 <div className="flex gap-3 mt-3 text-xs text-gray-400">
                   <span className="flex items-center gap-1">
                     <span className="w-2.5 h-2.5 rounded-full bg-green-400 inline-block" />
@@ -214,11 +309,23 @@ export default function EditModal({ sku, saving, onClose, onSave }: Props) {
                 onChange={(e) => set('review_status')(e.target.value as ReviewStatus)}
                 className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-base font-medium bg-white focus:outline-none focus:ring-2 focus:ring-gray-700 focus:border-transparent"
               >
-                <option value="pending">Not Started</option>
-                <option value="in_review">Under Review</option>
-                <option value="action_taken">Action Taken</option>
-                <option value="resolved">Resolved</option>
-                <option value="escalated">Escalated</option>
+                <optgroup label="Warehouse">
+                  <option value="pending">Not Started</option>
+                  <option value="sample_ordered">Sample Order Created</option>
+                  <option value="sample_at_hq">Sample at HQ</option>
+                </optgroup>
+                <optgroup label="QC">
+                  <option value="under_qc">Under QC</option>
+                  <option value="qc_done">QC Done</option>
+                </optgroup>
+                <optgroup label="Catalog">
+                  <option value="under_catalog">Under Catalog Review</option>
+                  <option value="catalog_done">Catalog Done</option>
+                </optgroup>
+                <optgroup label="Tech">
+                  <option value="size_chart_revision">Size Chart Revision</option>
+                  <option value="complete">Complete</option>
+                </optgroup>
               </select>
             </div>
 
@@ -234,18 +341,62 @@ export default function EditModal({ sku, saving, onClose, onSave }: Props) {
                 onChange={set('size_check')}
               />
               <YesNoToggle
-                label="Size Issue Found"
-                hint="Was a size discrepancy or problem identified?"
-                value={form.size_issue_found}
-                onChange={set('size_issue_found')}
-              />
-              <YesNoToggle
                 label="Fit Trial Completed"
                 hint="Was the garment physically tried on to check fit?"
                 value={form.fit_trial_done}
                 onChange={set('fit_trial_done')}
               />
+              <YesNoToggle
+                label="Size Issue Found"
+                hint="Was a size discrepancy or problem identified?"
+                value={form.size_issue_found}
+                onChange={set('size_issue_found')}
+              />
             </div>
+
+            {/* ── Size Chart Matrix (shown when size issue found) ── */}
+            {form.size_issue_found === true && (
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-bold text-blue-700 uppercase tracking-wider">
+                    Size Chart Update
+                  </p>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleGarmentTypeChange('top')}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                        garmentType === 'top'
+                          ? 'bg-blue-700 text-white border-blue-700'
+                          : 'bg-white text-blue-700 border-blue-200 hover:border-blue-400'
+                      }`}
+                    >
+                      Top Wear
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleGarmentTypeChange('bottom')}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                        garmentType === 'bottom'
+                          ? 'bg-blue-700 text-white border-blue-700'
+                          : 'bg-white text-blue-700 border-blue-200 hover:border-blue-400'
+                      }`}
+                    >
+                      Bottom Wear
+                    </button>
+                  </div>
+                </div>
+                <p className="text-xs text-blue-500 mb-3">
+                  Enter corrected measurements (cm) for each size.
+                </p>
+                <SizeChartMatrix
+                  cols={chartCols}
+                  rows={chartRows}
+                  data={form.size_chart_update}
+                  onChange={handleChartChange}
+                />
+              </div>
+            )}
 
             {/* ── Actions ── */}
             <div className="bg-gray-50 rounded-xl p-4">
