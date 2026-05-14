@@ -140,7 +140,7 @@ export default function Dashboard({ initialSkus, categories, userName, userRole 
           </span>
         </div>
 
-        <SkuTable skus={filtered} onEdit={setSelectedSku} />
+        <SkuTable skus={filtered} userRole={userRole} onEdit={setSelectedSku} />
       </main>
 
       {selectedSku && (

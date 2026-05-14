@@ -1,10 +1,11 @@
 'use client';
 
-import { SkuReview, STATUS_LABELS, STATUS_COLORS } from '@/types';
+import { SkuReview, STATUS_LABELS, STATUS_COLORS, UserRole } from '@/types';
 
 interface Props {
-  skus: SkuReview[];
-  onEdit: (sku: SkuReview) => void;
+  skus:     SkuReview[];
+  userRole: UserRole;
+  onEdit:   (sku: SkuReview) => void;
 }
 
 function BoolCell({ value }: { value: boolean | null }) {
@@ -16,7 +17,11 @@ function BoolCell({ value }: { value: boolean | null }) {
   );
 }
 
-export default function SkuTable({ skus, onEdit }: Props) {
+export default function SkuTable({ skus, userRole, onEdit }: Props) {
+  const isAdmin     = userRole === 'admin';
+  const showWarehouse = isAdmin || userRole === 'warehouse';
+  const showQC        = isAdmin || userRole === 'qc';
+  const showCatalog   = isAdmin || userRole === 'catalog';
   if (skus.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 py-16 text-center">
@@ -40,11 +45,13 @@ export default function SkuTable({ skus, onEdit }: Props) {
               <th className="text-left px-4 py-3 font-semibold">Vendor</th>
               <th className="text-right px-4 py-3 font-semibold">Return %</th>
               <th className="text-right px-4 py-3 font-semibold">Online Inv.</th>
-              <th className="text-center px-3 py-3 font-semibold">Size Check</th>
-              <th className="text-center px-3 py-3 font-semibold">Size Issue</th>
-              <th className="text-center px-3 py-3 font-semibold">Fit Trial</th>
-              <th className="text-center px-3 py-3 font-semibold">Debit Note</th>
-              <th className="text-center px-3 py-3 font-semibold">Desc. Updated</th>
+              {showWarehouse && <th className="text-center px-3 py-3 font-semibold">Sample Order</th>}
+              {showWarehouse && <th className="text-center px-3 py-3 font-semibold">Sample at HQ</th>}
+              {showQC && <th className="text-center px-3 py-3 font-semibold">Size Check</th>}
+              {showQC && <th className="text-center px-3 py-3 font-semibold">Size Issue</th>}
+              {showQC && <th className="text-center px-3 py-3 font-semibold">Fit Trial</th>}
+              {showQC && <th className="text-center px-3 py-3 font-semibold">Debit Note</th>}
+              {showCatalog && <th className="text-center px-3 py-3 font-semibold">Desc. Updated</th>}
               <th className="text-left px-4 py-3 font-semibold">Status</th>
               <th className="text-left px-4 py-3 font-semibold">Last Updated By</th>
               <th className="px-4 py-3"></th>
@@ -101,11 +108,13 @@ export default function SkuTable({ skus, onEdit }: Props) {
                   {sku.online_inventory != null ? sku.online_inventory.toLocaleString() : '—'}
                 </td>
 
-                <td className="px-3 py-3 text-center"><BoolCell value={sku.size_check} /></td>
-                <td className="px-3 py-3 text-center"><BoolCell value={sku.size_issue_found} /></td>
-                <td className="px-3 py-3 text-center"><BoolCell value={sku.fit_trial_done} /></td>
-                <td className="px-3 py-3 text-center"><BoolCell value={sku.debit_note_raised} /></td>
-                <td className="px-3 py-3 text-center"><BoolCell value={sku.description_updated} /></td>
+                {showWarehouse && <td className="px-3 py-3 text-center"><BoolCell value={sku.sample_order_created} /></td>}
+                {showWarehouse && <td className="px-3 py-3 text-center"><BoolCell value={sku.sample_at_hq} /></td>}
+                {showQC && <td className="px-3 py-3 text-center"><BoolCell value={sku.size_check} /></td>}
+                {showQC && <td className="px-3 py-3 text-center"><BoolCell value={sku.size_issue_found} /></td>}
+                {showQC && <td className="px-3 py-3 text-center"><BoolCell value={sku.fit_trial_done} /></td>}
+                {showQC && <td className="px-3 py-3 text-center"><BoolCell value={sku.debit_note_raised} /></td>}
+                {showCatalog && <td className="px-3 py-3 text-center"><BoolCell value={sku.description_updated} /></td>}
 
                 <td className="px-4 py-3">
                   <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${STATUS_COLORS[sku.review_status]}`}>
