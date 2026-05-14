@@ -80,15 +80,18 @@ export async function PATCH(
     // Merge allowed updates onto current values
     const merged = { ...currentRow, ...filteredBody };
 
-    // Admin: use whatever status they set (or keep current), no auto-advance
-    // Teams: status computed by auto-advance rules only
+    const autoAdvanced = computeAutoStatus(merged);
     let finalStatus: ReviewStatus;
-    if (userRole === 'admin') {
-      finalStatus = ('review_status' in filteredBody
-        ? filteredBody.review_status
-        : currentRow.review_status) as ReviewStatus;
+    if (
+      userRole === 'admin' &&
+      'review_status' in filteredBody &&
+      filteredBody.review_status !== currentRow.review_status
+    ) {
+      // Admin explicitly changed the status dropdown — respect their override
+      finalStatus = filteredBody.review_status as ReviewStatus;
     } else {
-      finalStatus = computeAutoStatus(merged);
+      // Auto-advance for all roles (including admin who didn't change dropdown)
+      finalStatus = autoAdvanced;
     }
 
     const result = await pool.query(
