@@ -39,6 +39,12 @@ export async function POST(request: NextRequest) {
     // Role on users
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'admin'`,
 
+    // Set correct roles for team accounts
+    `UPDATE users SET role = 'warehouse' WHERE email = 'warehouse@snitch.com'`,
+    `UPDATE users SET role = 'qc'        WHERE email = 'qc@snitch.com'`,
+    `UPDATE users SET role = 'catalog'   WHERE email = 'catalog@snitch.com'`,
+    `UPDATE users SET role = 'tech'      WHERE email = 'tech@snitch.com'`,
+
     // Migrate old 9-value status → new 5-value status
     `UPDATE sku_reviews SET review_status = 'warehouse' WHERE review_status IN ('pending','sample_ordered','sample_at_hq')`,
     `UPDATE sku_reviews SET review_status = 'qc'        WHERE review_status IN ('under_qc','qc_done')`,
