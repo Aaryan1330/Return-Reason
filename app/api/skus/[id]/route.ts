@@ -80,10 +80,13 @@ export async function PATCH(
     // Merge allowed updates onto current values
     const merged = { ...currentRow, ...filteredBody };
 
-    // Auto-advance status (team users only; admin can manually set via review_status in body)
+    // Admin: use whatever status they set (or keep current), no auto-advance
+    // Teams: status computed by auto-advance rules only
     let finalStatus: ReviewStatus;
-    if (userRole === 'admin' && 'review_status' in filteredBody) {
-      finalStatus = filteredBody.review_status as ReviewStatus;
+    if (userRole === 'admin') {
+      finalStatus = ('review_status' in filteredBody
+        ? filteredBody.review_status
+        : currentRow.review_status) as ReviewStatus;
     } else {
       finalStatus = computeAutoStatus(merged);
     }
