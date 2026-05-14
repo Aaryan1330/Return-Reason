@@ -1,45 +1,28 @@
-export type ReviewStatus =
-  | 'pending'
-  | 'sample_ordered'
-  | 'sample_at_hq'
-  | 'under_qc'
-  | 'qc_done'
-  | 'under_catalog'
-  | 'catalog_done'
-  | 'size_chart_revision'
-  | 'complete';
-
+export type ReviewStatus = 'warehouse' | 'qc' | 'catalog' | 'tech' | 'completed';
 export type SkuType = 'weekly' | 'repeat';
+export type UserRole = 'admin' | 'warehouse' | 'qc' | 'catalog' | 'tech';
 
 export const TEAM_STATUSES = {
-  warehouse: ['pending', 'sample_ordered', 'sample_at_hq'] as ReviewStatus[],
-  qc:        ['under_qc', 'qc_done'] as ReviewStatus[],
-  catalog:   ['under_catalog', 'catalog_done'] as ReviewStatus[],
-  tech:      ['size_chart_revision', 'complete'] as ReviewStatus[],
+  warehouse: ['warehouse'] as ReviewStatus[],
+  qc:        ['qc']        as ReviewStatus[],
+  catalog:   ['catalog']   as ReviewStatus[],
+  tech:      ['tech']      as ReviewStatus[],
 };
 
 export const STATUS_LABELS: Record<ReviewStatus, string> = {
-  pending:             'Not Started',
-  sample_ordered:      'Sample Order Created',
-  sample_at_hq:        'Sample at HQ',
-  under_qc:            'Under QC',
-  qc_done:             'QC Done',
-  under_catalog:       'Under Catalog Review',
-  catalog_done:        'Catalog Done',
-  size_chart_revision: 'Size Chart Revision',
-  complete:            'Complete',
+  warehouse: 'Warehouse',
+  qc:        'QC',
+  catalog:   'Catalog',
+  tech:      'Tech',
+  completed: 'Completed',
 };
 
 export const STATUS_COLORS: Record<ReviewStatus, string> = {
-  pending:             'bg-gray-100 text-gray-500',
-  sample_ordered:      'bg-orange-100 text-orange-700',
-  sample_at_hq:        'bg-amber-100 text-amber-700',
-  under_qc:            'bg-blue-100 text-blue-700',
-  qc_done:             'bg-cyan-100 text-cyan-700',
-  under_catalog:       'bg-violet-100 text-violet-700',
-  catalog_done:        'bg-purple-100 text-purple-700',
-  size_chart_revision: 'bg-pink-100 text-pink-700',
-  complete:            'bg-green-100 text-green-700',
+  warehouse: 'bg-orange-100 text-orange-700',
+  qc:        'bg-blue-100 text-blue-700',
+  catalog:   'bg-violet-100 text-violet-700',
+  tech:      'bg-pink-100 text-pink-700',
+  completed: 'bg-green-100 text-green-700',
 };
 
 export type SizeChartData = Record<string, Record<string, string>>;
@@ -69,15 +52,25 @@ export interface SkuReview {
   xl5_return: number | null;
   xl6_return: number | null;
 
-  // Production team fills these
+  // Warehouse
+  sample_order_created: boolean | null;
+  sample_at_hq: boolean | null;
+
+  // QC
   size_check: boolean | null;
   fit_trial_done: boolean | null;
   size_issue_found: boolean | null;
+  need_size_chart_updation: boolean | null;
   size_chart_update: SizeChartData | null;
   debit_note_raised: boolean | null;
   remarks: string | null;
+
+  // Catalog
   description_updated: boolean | null;
   description_update_notes: string | null;
+
+  // Tech
+  size_chart_updated: boolean | null;
 
   review_status: ReviewStatus;
 
@@ -88,10 +81,10 @@ export interface SkuReview {
 }
 
 export interface SummaryStats {
-  total: number;
+  total:     number;
   warehouse: number;
-  qc: number;
-  catalog: number;
-  tech: number;
-  complete: number;
+  qc:        number;
+  catalog:   number;
+  tech:      number;
+  completed: number;
 }

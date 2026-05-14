@@ -3,30 +3,29 @@
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { SkuReview, SkuType, SummaryStats, TEAM_STATUSES } from '@/types';
+import { SkuReview, SkuType, SummaryStats, UserRole } from '@/types';
 import SummaryCards from './SummaryCards';
 import SkuTable from './SkuTable';
 import EditModal from './EditModal';
 
 interface Props {
-  initialSkus: SkuReview[];
-  skuType: SkuType;
-  currentWeek: string;
+  initialSkus:    SkuReview[];
+  skuType:        SkuType;
+  currentWeek:    string;
   availableWeeks: string[];
-  categories: string[];
-  userName: string;
+  categories:     string[];
+  userName:       string;
+  userRole:       UserRole;
 }
 
 function computeStats(skus: SkuReview[]): SummaryStats {
-  const inTeam = (team: keyof typeof TEAM_STATUSES) =>
-    skus.filter((s) => (TEAM_STATUSES[team] as readonly string[]).includes(s.review_status)).length;
   return {
     total:     skus.length,
-    warehouse: inTeam('warehouse'),
-    qc:        inTeam('qc'),
-    catalog:   inTeam('catalog'),
-    tech:      inTeam('tech'),
-    complete:  skus.filter((s) => s.review_status === 'complete').length,
+    warehouse: skus.filter((s) => s.review_status === 'warehouse').length,
+    qc:        skus.filter((s) => s.review_status === 'qc').length,
+    catalog:   skus.filter((s) => s.review_status === 'catalog').length,
+    tech:      skus.filter((s) => s.review_status === 'tech').length,
+    completed: skus.filter((s) => s.review_status === 'completed').length,
   };
 }
 
@@ -53,14 +52,10 @@ function NavItem({
     <button
       onClick={onClick}
       className={`w-full text-left px-4 py-3 rounded-xl transition-all ${
-        active
-          ? 'bg-gray-900 text-white'
-          : 'text-gray-600 hover:bg-gray-100'
+        active ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
       }`}
     >
-      <div className={`font-semibold text-sm ${active ? 'text-white' : 'text-gray-800'}`}>
-        {label}
-      </div>
+      <div className={`font-semibold text-sm ${active ? 'text-white' : 'text-gray-800'}`}>{label}</div>
       <div className={`text-xs mt-0.5 ${active ? 'text-gray-300' : 'text-gray-400'}`}>{sub}</div>
     </button>
   );
@@ -73,6 +68,7 @@ export default function Dashboard({
   availableWeeks,
   categories,
   userName,
+  userRole,
 }: Props) {
   const router = useRouter();
   const [skus, setSkus] = useState<SkuReview[]>(initialSkus);
@@ -85,10 +81,7 @@ export default function Dashboard({
   const stats = computeStats(skus);
 
   const filtered = skus.filter((s) => {
-    if (filterTeam !== 'all') {
-      const teamStatuses = TEAM_STATUSES[filterTeam as keyof typeof TEAM_STATUSES] as readonly string[];
-      if (!teamStatuses.includes(s.review_status)) return false;
-    }
+    if (filterTeam !== 'all' && s.review_status !== filterTeam) return false;
     if (filterCategory !== 'all' && s.category !== filterCategory) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -96,8 +89,7 @@ export default function Dashboard({
         !s.sku_group.toLowerCase().includes(q) &&
         !(s.category ?? '').toLowerCase().includes(q) &&
         !(s.vendor ?? '').toLowerCase().includes(q)
-      )
-        return false;
+      ) return false;
     }
     return true;
   });
@@ -133,14 +125,17 @@ export default function Dashboard({
       <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
         <div className="px-6 py-3 flex items-center justify-between">
           <div>
-            <h1 className="text-base font-bold text-gray-900 tracking-tight">
-              Snitch — Returns Review
-            </h1>
+            <h1 className="text-base font-bold text-gray-900 tracking-tight">Snitch — Returns Review</h1>
             <p className="text-xs text-gray-400">Size &amp; Fit Quality Control</p>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-600 hidden sm:block">
               Hello, <strong>{userName}</strong>
+              {userRole !== 'admin' && (
+                <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full capitalize">
+                  {userRole}
+                </span>
+              )}
             </span>
             <button
               onClick={() => signOut({ callbackUrl: '/login' })}
@@ -155,9 +150,7 @@ export default function Dashboard({
       <div className="flex flex-1 overflow-hidden">
         {/* ── Sidebar ── */}
         <aside className="w-56 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col p-3 gap-1 min-h-full">
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider px-2 py-2">
-            Review Type
-          </p>
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider px-2 py-2">Review Type</p>
           <NavItem
             label="Weekly Review"
             sub="New SKUs this week"
@@ -175,7 +168,6 @@ export default function Dashboard({
         {/* ── Main Content ── */}
         <main className="flex-1 overflow-auto p-6 space-y-5">
 
-          {/* Week selector — weekly only */}
           {skuType === 'weekly' && (
             <div className="flex items-center gap-3">
               <span className="text-sm font-semibold text-gray-600">Week:</span>
@@ -191,12 +183,10 @@ export default function Dashboard({
             </div>
           )}
 
-          {/* Summary cards */}
           <SummaryCards stats={stats} />
 
-          {/* Instruction banner */}
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-sm text-amber-800">
-            Click <strong>Fill / Edit</strong> on any row to review that SKU. All changes save immediately.
+            Click <strong>Fill / Edit</strong> on any row to review that SKU. Status advances automatically when all required fields are filled.
           </div>
 
           {/* Filters */}
@@ -228,22 +218,22 @@ export default function Dashboard({
               <option value="qc">QC</option>
               <option value="catalog">Catalog</option>
               <option value="tech">Tech</option>
+              <option value="completed">Completed</option>
             </select>
             <span className="text-sm text-gray-400 ml-auto">
               {filtered.length} of {skus.length} items
             </span>
           </div>
 
-          {/* Table */}
           <SkuTable skus={filtered} onEdit={setSelectedSku} />
         </main>
       </div>
 
-      {/* Edit Modal */}
       {selectedSku && (
         <EditModal
           sku={selectedSku}
           saving={saving}
+          userRole={userRole}
           onClose={() => setSelectedSku(null)}
           onSave={handleSave}
         />

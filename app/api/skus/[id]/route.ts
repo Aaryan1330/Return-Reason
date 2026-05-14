@@ -2,8 +2,47 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import pool from '@/lib/db';
+import { ReviewStatus } from '@/types';
 
-// PATCH /api/skus/[id] — save production team's review inputs
+const ROLE_ALLOWED_FIELDS: Record<string, string[]> = {
+  warehouse: ['sample_order_created', 'sample_at_hq'],
+  qc:        ['size_check', 'fit_trial_done', 'size_issue_found', 'need_size_chart_updation', 'debit_note_raised', 'remarks', 'size_chart_update'],
+  catalog:   ['description_updated', 'description_update_notes'],
+  tech:      ['size_chart_updated'],
+  admin:     ['*'],
+};
+
+function computeAutoStatus(row: any): ReviewStatus {
+  const s = row.review_status as ReviewStatus;
+
+  if (s === 'warehouse' && row.sample_order_created === true && row.sample_at_hq === true) {
+    return 'qc';
+  }
+  if (
+    s === 'qc' &&
+    row.size_check === true &&
+    row.fit_trial_done === true &&
+    row.size_issue_found !== null && row.size_issue_found !== undefined &&
+    row.need_size_chart_updation !== null && row.need_size_chart_updation !== undefined &&
+    row.debit_note_raised !== null && row.debit_note_raised !== undefined &&
+    row.remarks && String(row.remarks).trim() !== ''
+  ) {
+    return 'catalog';
+  }
+  if (
+    s === 'catalog' &&
+    row.description_updated !== null && row.description_updated !== undefined &&
+    (row.description_updated === false || (row.description_update_notes && String(row.description_update_notes).trim() !== ''))
+  ) {
+    return row.need_size_chart_updation === true ? 'tech' : 'completed';
+  }
+  if (s === 'tech' && row.size_chart_updated === true) {
+    return 'completed';
+  }
+  return s;
+}
+
+// PATCH /api/skus/[id]
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -15,81 +54,77 @@ export async function PATCH(
   if (isNaN(id)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
 
   const userId = (session.user as any).id;
+  const userRole: string = (session.user as any).role ?? 'admin';
 
   try {
-    const {
-      size_check,
-      size_issue_found,
-      fit_trial_done,
-      debit_note_raised,
-      remarks,
-      description_updated,
-      description_update_notes,
-      review_status,
-      size_chart_update,
-    } = await request.json();
+    const body = await request.json();
 
-    const valid = [
-      'pending', 'sample_ordered', 'sample_at_hq',
-      'under_qc', 'qc_done',
-      'under_catalog', 'catalog_done',
-      'size_chart_revision', 'complete',
-    ];
-    if (review_status && !valid.includes(review_status)) {
-      return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+    // Filter body to only fields this role can write
+    const allowedFields = ROLE_ALLOWED_FIELDS[userRole] ?? [];
+    const filteredBody: Record<string, unknown> = {};
+    if (allowedFields[0] === '*') {
+      Object.assign(filteredBody, body);
+    } else {
+      for (const field of allowedFields) {
+        if (field in body) filteredBody[field] = body[field];
+      }
     }
 
-    // Auto-advance status rules
-    let finalStatus: string = review_status ?? 'pending';
-    if (finalStatus === 'sample_at_hq') {
-      finalStatus = 'under_qc';
-    } else if (
-      (finalStatus === 'under_qc' || finalStatus === 'qc_done') &&
-      size_check === true &&
-      fit_trial_done === true &&
-      size_issue_found === false &&
-      debit_note_raised !== null &&
-      debit_note_raised !== undefined &&
-      remarks && String(remarks).trim() !== ''
-    ) {
-      finalStatus = 'under_catalog';
-    } else if (finalStatus === 'catalog_done') {
-      finalStatus = 'size_chart_revision';
+    // Fetch current row
+    const current = await pool.query('SELECT * FROM sku_reviews WHERE id = $1', [id]);
+    if (current.rows.length === 0) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    const currentRow = current.rows[0];
+
+    // Merge allowed updates onto current values
+    const merged = { ...currentRow, ...filteredBody };
+
+    // Auto-advance status (team users only; admin can manually set via review_status in body)
+    let finalStatus: ReviewStatus;
+    if (userRole === 'admin' && 'review_status' in filteredBody) {
+      finalStatus = filteredBody.review_status as ReviewStatus;
+    } else {
+      finalStatus = computeAutoStatus(merged);
     }
 
     const result = await pool.query(
       `UPDATE sku_reviews SET
-        size_check               = $1,
-        size_issue_found         = $2,
-        fit_trial_done           = $3,
-        debit_note_raised        = $4,
-        remarks                  = $5,
-        description_updated      = $6,
-        description_update_notes = $7,
-        review_status            = $8,
-        size_chart_update        = $9,
-        last_updated_by          = $10,
+        sample_order_created     = $1,
+        sample_at_hq             = $2,
+        size_check               = $3,
+        fit_trial_done           = $4,
+        size_issue_found         = $5,
+        need_size_chart_updation = $6,
+        size_chart_update        = $7,
+        debit_note_raised        = $8,
+        remarks                  = $9,
+        description_updated      = $10,
+        description_update_notes = $11,
+        size_chart_updated       = $12,
+        review_status            = $13,
+        last_updated_by          = $14,
         last_updated_at          = NOW()
-       WHERE id = $11
+       WHERE id = $15
        RETURNING *`,
       [
-        size_check ?? null,
-        size_issue_found ?? null,
-        fit_trial_done ?? null,
-        debit_note_raised ?? null,
-        remarks ?? null,
-        description_updated ?? null,
-        description_update_notes ?? null,
+        merged.sample_order_created ?? null,
+        merged.sample_at_hq         ?? null,
+        merged.size_check            ?? null,
+        merged.fit_trial_done        ?? null,
+        merged.size_issue_found      ?? null,
+        merged.need_size_chart_updation ?? null,
+        merged.size_chart_update ? JSON.stringify(merged.size_chart_update) : null,
+        merged.debit_note_raised     ?? null,
+        merged.remarks               ?? null,
+        merged.description_updated   ?? null,
+        merged.description_update_notes ?? null,
+        merged.size_chart_updated    ?? null,
         finalStatus,
-        size_chart_update ? JSON.stringify(size_chart_update) : null,
         userId,
         id,
       ]
     );
-
-    if (result.rows.length === 0) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
 
     const full = await pool.query(
       `SELECT sr.*, u.name AS last_updated_by_name

@@ -7,8 +7,8 @@ Place the CSV file at: scripts/repeat-data.csv
 
 import csv, json, re, urllib.request, urllib.error, sys, os
 
-API_URL = "https://returns.snitch-workflow.com/api/skus"
-API_KEY = "Snitch@Internal2026"
+API_BASE = "https://returns.snitch-workflow.com/api/skus"
+API_KEY  = "Snitch@Internal2026"
 
 def extract_image_url(html):
     m = re.search(r'src=["\']([^"\']+)["\']', html)
@@ -29,24 +29,42 @@ def to_int(val):
 csv_path = os.path.join(os.path.dirname(__file__), 'repeat-data.csv')
 if not os.path.exists(csv_path):
     print(f"ERROR: CSV not found at {csv_path}")
-    print("Save the CSV file as scripts/repeat-data.csv and rerun.")
     sys.exit(1)
 
+# ── Step 1: Delete all existing repeat products ───────────────────────────────
+print("Deleting existing repeat products...")
+req = urllib.request.Request(
+    API_BASE,
+    headers={'x-api-key': API_KEY},
+    method='DELETE'
+)
+try:
+    with urllib.request.urlopen(req) as resp:
+        result = json.loads(resp.read())
+        print(f"Deleted {result.get('deleted', 0)} existing repeat SKUs.")
+except urllib.error.HTTPError as e:
+    print(f"ERROR during delete {e.code}: {e.read().decode()}")
+    sys.exit(1)
+
+# ── Step 2: Parse CSV ─────────────────────────────────────────────────────────
 rows = []
 with open(csv_path, newline='', encoding='utf-8-sig') as f:
     reader = csv.DictReader(f)
     for row in reader:
+        rp = to_num(row.get('RETURN_PCT'))
+        if rp is not None and rp < 10:
+            continue  # skip anything below 10%
         image_url = extract_image_url(row.get('IMAGE', ''))
-        vendor = (row.get('VENDOR') or '').strip() or None
-        category = (row.get('CATEGORY') or '').strip() or None
-        l1 = (row.get('l1-category') or '').strip() or None
+        vendor    = (row.get('VENDOR') or '').strip() or None
+        category  = (row.get('CATEGORY') or '').strip() or None
+        l1        = (row.get('l1-category') or '').strip() or None
 
         rows.append({
             "sku_group":        row['SKU_GROUP'].strip(),
             "category":         category,
             "l1_category":      l1,
             "vendor":           vendor,
-            "return_pct":       to_num(row.get('RETURN_PCT')),
+            "return_pct":       rp,
             "online_inventory": to_int(row.get('ONLINE_INVENTORY')),
             "total_inventory":  to_int(row.get('TOTAL_INVENTORY')),
             "image_url":        image_url,
@@ -63,24 +81,20 @@ with open(csv_path, newline='', encoding='utf-8-sig') as f:
             "xl6_return":       to_int(row.get('XL6_RETURN')),
         })
 
-print(f"Parsed {len(rows)} rows. Sending to API...")
+print(f"Parsed {len(rows)} rows (≥10% return rate). Sending to API...")
 
+# ── Step 3: Insert ────────────────────────────────────────────────────────────
 payload = json.dumps(rows).encode('utf-8')
 req = urllib.request.Request(
-    API_URL,
+    API_BASE,
     data=payload,
-    headers={
-        'Content-Type': 'application/json',
-        'x-api-key': API_KEY,
-    },
+    headers={'Content-Type': 'application/json', 'x-api-key': API_KEY},
     method='POST'
 )
-
 try:
     with urllib.request.urlopen(req) as resp:
         result = json.loads(resp.read())
         print(f"SUCCESS: inserted {len(result)} SKUs.")
 except urllib.error.HTTPError as e:
-    body = e.read().decode()
-    print(f"ERROR {e.code}: {body}")
+    print(f"ERROR {e.code}: {e.read().decode()}")
     sys.exit(1)

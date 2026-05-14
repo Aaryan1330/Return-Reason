@@ -67,6 +67,21 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// DELETE /api/skus — wipe all repeat products (for fresh CSV upload)
+export async function DELETE(request: NextRequest) {
+  const apiKey = request.headers.get('x-api-key');
+  if (!apiKey || apiKey !== process.env.INTERNAL_API_KEY) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  try {
+    const result = await pool.query(`DELETE FROM sku_reviews WHERE type = 'repeat' RETURNING id`);
+    return NextResponse.json({ deleted: result.rowCount });
+  } catch (err) {
+    console.error('DELETE /api/skus:', err);
+    return NextResponse.json({ error: 'Failed to delete' }, { status: 500 });
+  }
+}
+
 // POST /api/skus — called by backend with INTERNAL_API_KEY
 export async function POST(request: NextRequest) {
   const apiKey = request.headers.get('x-api-key');

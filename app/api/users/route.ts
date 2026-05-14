@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import pool from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
+const VALID_ROLES = ['admin', 'warehouse', 'qc', 'catalog', 'tech'];
+
 // POST /api/users — create a new team member account
 // Accepts INTERNAL_API_KEY (for initial setup) or authenticated session
 export async function POST(request: NextRequest) {
@@ -15,7 +17,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { email, password, name } = await request.json();
+    const { email, password, name, role } = await request.json();
 
     if (!email || !password || !name) {
       return NextResponse.json(
@@ -27,12 +29,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
     }
 
+    const assignedRole = VALID_ROLES.includes(role) ? role : 'admin';
     const passwordHash = await bcrypt.hash(password, 12);
     const result = await pool.query(
-      `INSERT INTO users (email, password_hash, name)
-       VALUES ($1, $2, $3)
-       RETURNING id, email, name, created_at`,
-      [email.toLowerCase().trim(), passwordHash, name.trim()]
+      `INSERT INTO users (email, password_hash, name, role)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, email, name, role, created_at`,
+      [email.toLowerCase().trim(), passwordHash, name.trim(), assignedRole]
     );
 
     return NextResponse.json(result.rows[0], { status: 201 });

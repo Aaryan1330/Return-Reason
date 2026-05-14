@@ -3,8 +3,7 @@ import pool from '@/lib/db';
 
 /**
  * POST /api/migrate
- * Adds new columns to sku_reviews for the repeat/size-return expansion.
- * Safe to run multiple times (uses ADD COLUMN IF NOT EXISTS).
+ * Adds new columns and migrates status values. Safe to run multiple times.
  */
 export async function POST(request: NextRequest) {
   const apiKey = request.headers.get('x-api-key');
@@ -13,6 +12,7 @@ export async function POST(request: NextRequest) {
   }
 
   const migrations = [
+    // Original columns
     `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS type VARCHAR(20) NOT NULL DEFAULT 'weekly'`,
     `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS l1_category VARCHAR(50)`,
     `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS vendor VARCHAR(255)`,
@@ -29,6 +29,22 @@ export async function POST(request: NextRequest) {
     `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS xl6_return INTEGER`,
     `CREATE INDEX IF NOT EXISTS idx_sku_reviews_type ON sku_reviews(type)`,
     `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS size_chart_update JSONB`,
+
+    // New workflow columns
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS sample_order_created BOOLEAN`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS sample_at_hq BOOLEAN`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS need_size_chart_updation BOOLEAN`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS size_chart_updated BOOLEAN`,
+
+    // Role on users
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'admin'`,
+
+    // Migrate old 9-value status → new 5-value status
+    `UPDATE sku_reviews SET review_status = 'warehouse' WHERE review_status IN ('pending','sample_ordered','sample_at_hq')`,
+    `UPDATE sku_reviews SET review_status = 'qc'        WHERE review_status IN ('under_qc','qc_done')`,
+    `UPDATE sku_reviews SET review_status = 'catalog'   WHERE review_status IN ('under_catalog','catalog_done')`,
+    `UPDATE sku_reviews SET review_status = 'tech'      WHERE review_status = 'size_chart_revision'`,
+    `UPDATE sku_reviews SET review_status = 'completed' WHERE review_status = 'complete'`,
   ];
 
   try {

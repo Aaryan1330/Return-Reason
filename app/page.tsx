@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import pool from '@/lib/db';
-import { SkuReview, SkuType } from '@/types';
+import { SkuReview, SkuType, UserRole } from '@/types';
 import Dashboard from '@/components/Dashboard';
 
 function getMondayOfWeek(dateStr?: string): string {
@@ -79,6 +79,8 @@ export default async function HomePage({
       ? [weekStart, ...availableWeeks]
       : availableWeeks;
 
+  const userRole = ((session.user as any)?.role ?? 'admin') as UserRole;
+
   return (
     <Dashboard
       initialSkus={skus}
@@ -87,6 +89,7 @@ export default async function HomePage({
       availableWeeks={weeksToShow}
       categories={categories}
       userName={session.user?.name ?? session.user?.email ?? 'User'}
+      userRole={userRole}
     />
   );
 }
