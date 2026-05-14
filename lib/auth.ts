@@ -46,6 +46,10 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id   = user.id;
         token.role = (user as any).role ?? 'admin';
+      } else if (token.id) {
+        // Always refresh role from DB so stale JWTs pick up the current value
+        const r = await pool.query('SELECT role FROM users WHERE id = $1', [token.id]);
+        token.role = r.rows[0]?.role ?? 'admin';
       }
       return token;
     },

@@ -250,7 +250,22 @@ export default function EditModal({ sku, saving, userRole, onClose, onSave }: Pr
           <button onClick={onClose} className="text-gray-300 hover:text-gray-600 text-3xl leading-none flex-shrink-0 -mt-1">×</button>
         </div>
 
-        <form onSubmit={async (e) => { e.preventDefault(); await onSave(sku.id, form); }}>
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          let payload: Partial<SkuReview>;
+          if (userRole === 'warehouse') {
+            payload = { sample_order_created: form.sample_order_created, sample_at_hq: form.sample_at_hq };
+          } else if (userRole === 'qc') {
+            payload = { size_check: form.size_check, fit_trial_done: form.fit_trial_done, size_issue_found: form.size_issue_found, need_size_chart_updation: form.need_size_chart_updation, debit_note_raised: form.debit_note_raised, remarks: form.remarks, size_chart_update: form.size_chart_update };
+          } else if (userRole === 'catalog') {
+            payload = { description_updated: form.description_updated, description_update_notes: form.description_update_notes };
+          } else if (userRole === 'tech') {
+            payload = { size_chart_updated: form.size_chart_updated };
+          } else {
+            payload = form as Partial<SkuReview>;
+          }
+          await onSave(sku.id, payload);
+        }}>
           <div className="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
 
             {/* ── Size-wise Returns (QC & admin) ── */}
