@@ -5,14 +5,10 @@ Usage: python3 scripts/insert-repeat.py
 Place the CSV file at: scripts/repeat-data.csv
 """
 
-import csv, json, re, urllib.request, urllib.error, sys, os
+import csv, json, urllib.request, urllib.error, sys, os
 
 API_BASE = "https://returns.snitch-workflow.com/api/skus"
 API_KEY  = "Snitch@Internal2026"
-
-def extract_image_url(html):
-    m = re.search(r'src=["\']([^"\']+)["\']', html)
-    return m.group(1) if m else None
 
 def to_num(val):
     if val is None or str(val).strip() == '':
@@ -21,10 +17,6 @@ def to_num(val):
         return float(str(val).replace('%', '').strip())
     except ValueError:
         return None
-
-def to_int(val):
-    n = to_num(val)
-    return int(n) if n is not None else None
 
 csv_path = os.path.join(os.path.dirname(__file__), 'repeat-data.csv')
 if not os.path.exists(csv_path):
@@ -51,13 +43,17 @@ rows = []
 with open(csv_path, newline='', encoding='utf-8-sig') as f:
     reader = csv.DictReader(f)
     for row in reader:
-        rp = to_num(row.get('RETURN_PCT'))
+        # Handle RETRUN_PCT typo in column name
+        rp = to_num(row.get('RETURN_PCT') or row.get('RETRUN_PCT'))
         if rp is not None and rp < 10:
-            continue  # skip anything below 10%
-        image_url = extract_image_url(row.get('IMAGE', ''))
-        vendor    = (row.get('VENDOR') or '').strip() or None
-        category  = (row.get('CATEGORY') or '').strip() or None
-        l1        = (row.get('L1_CATEGORY') or '').strip() or None
+            continue
+
+        # IMAGE_URL is a direct URL in this CSV
+        image_url = (row.get('IMAGE_URL') or row.get('IMAGE') or '').strip() or None
+
+        vendor   = (row.get('VENDOR') or '').strip() or None
+        category = (row.get('CATEGORY') or '').strip() or None
+        l1       = (row.get('L1_CATEGORY') or '').strip() or None
 
         rows.append({
             "sku_group":        row['SKU_GROUP'].strip(),
@@ -65,11 +61,11 @@ with open(csv_path, newline='', encoding='utf-8-sig') as f:
             "l1_category":      l1,
             "vendor":           vendor,
             "return_pct":       rp,
-            "online_inventory": to_int(row.get('ONLINE_INVENTORY')),
-            "total_inventory":  to_int(row.get('TOTAL_INVENTORY')),
+            "online_inventory": to_num(row.get('ONLINE_INVENTORY')),
+            "total_inventory":  to_num(row.get('TOTAL_INVENTORY')),
             "image_url":        image_url,
             "type":             "repeat",
-            # Return % per size
+            # Per-size return % (only XS_RETURN exists in this CSV)
             "xs_return":        to_num(row.get('XS_RETURN')),
             "s_return":         to_num(row.get('S_RETURN')),
             "m_return":         to_num(row.get('M_RETURN')),
@@ -104,9 +100,10 @@ with open(csv_path, newline='', encoding='utf-8-sig') as f:
             "xl5_too_small":    to_num(row.get('XL5_TOO_SMALL')),
             "xl6_too_big":      to_num(row.get('XL6_TOO_BIG')),
             "xl6_too_small":    to_num(row.get('XL6_TOO_SMALL')),
+            # XL7 / XL8 not in DB schema — skipped
         })
 
-print(f"Parsed {len(rows)} rows (>=10% return rate). Sending to API...")
+print(f"Parsed {len(rows)} rows. Sending to API...")
 
 # ── Step 3: Insert ────────────────────────────────────────────────────────────
 payload = json.dumps(rows).encode('utf-8')
