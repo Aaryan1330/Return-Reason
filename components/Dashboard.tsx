@@ -35,8 +35,12 @@ export default function Dashboard({ initialSkus, categories, userName, userRole 
 
   const stats = computeStats(skus);
 
+  // Non-admin roles only see their own queue
+  const roleFilter = userRole !== 'admin' ? userRole : null;
+
   const filtered = skus.filter((s) => {
-    if (filterTeam !== 'all' && s.review_status !== filterTeam) return false;
+    if (roleFilter && s.review_status !== roleFilter) return false;
+    if (userRole === 'admin' && filterTeam !== 'all' && s.review_status !== filterTeam) return false;
     if (filterCategory !== 'all' && s.category !== filterCategory) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -123,18 +127,20 @@ export default function Dashboard({ initialSkus, categories, userName, userRole 
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
-          <select
-            value={filterTeam}
-            onChange={(e) => setFilterTeam(e.target.value)}
-            className="border border-gray-200 rounded-xl px-4 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-700"
-          >
-            <option value="all">All Products</option>
-            <option value="warehouse">Warehouse</option>
-            <option value="qc">QC</option>
-            <option value="catalog">Catalog</option>
-            <option value="tech">Tech</option>
-            <option value="completed">Completed</option>
-          </select>
+          {userRole === 'admin' && (
+            <select
+              value={filterTeam}
+              onChange={(e) => setFilterTeam(e.target.value)}
+              className="border border-gray-200 rounded-xl px-4 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-700"
+            >
+              <option value="all">All Products</option>
+              <option value="warehouse">Warehouse</option>
+              <option value="qc">QC</option>
+              <option value="catalog">Catalog</option>
+              <option value="tech">Tech</option>
+              <option value="completed">Completed</option>
+            </select>
+          )}
           <span className="text-sm text-gray-400 ml-auto">
             {filtered.length} of {skus.length} items
           </span>

@@ -47,8 +47,8 @@ export default function SkuTable({ skus, userRole, onEdit }: Props) {
               <th className="text-right px-4 py-3 font-semibold">Online Inv.</th>
               {showWarehouse && <th className="text-center px-3 py-3 font-semibold">Sample Order</th>}
               {showWarehouse && <th className="text-center px-3 py-3 font-semibold">Sample at HQ</th>}
+              {showQC && <th className="text-center px-3 py-3 font-semibold">Sample Req.</th>}
               {showQC && <th className="text-center px-3 py-3 font-semibold">Size Check</th>}
-              {showQC && <th className="text-center px-3 py-3 font-semibold">Size Issue</th>}
               {showQC && <th className="text-center px-3 py-3 font-semibold">Fit Trial</th>}
               {showQC && <th className="text-center px-3 py-3 font-semibold">Debit Note</th>}
               {showCatalog && <th className="text-center px-3 py-3 font-semibold">Desc. Updated</th>}
@@ -110,8 +110,8 @@ export default function SkuTable({ skus, userRole, onEdit }: Props) {
 
                 {showWarehouse && <td className="px-3 py-3 text-center"><BoolCell value={sku.sample_order_created} /></td>}
                 {showWarehouse && <td className="px-3 py-3 text-center"><BoolCell value={sku.sample_at_hq} /></td>}
+                {showQC && <td className="px-3 py-3 text-center"><BoolCell value={sku.sample_required} /></td>}
                 {showQC && <td className="px-3 py-3 text-center"><BoolCell value={sku.size_check} /></td>}
-                {showQC && <td className="px-3 py-3 text-center"><BoolCell value={sku.size_issue_found} /></td>}
                 {showQC && <td className="px-3 py-3 text-center"><BoolCell value={sku.fit_trial_done} /></td>}
                 {showQC && <td className="px-3 py-3 text-center"><BoolCell value={sku.debit_note_raised} /></td>}
                 {showCatalog && <td className="px-3 py-3 text-center"><BoolCell value={sku.description_updated} /></td>}

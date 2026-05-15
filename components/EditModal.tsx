@@ -13,26 +13,7 @@ interface Props {
 
 type BoolVal = boolean | null;
 
-// ─── Size return color ───────────────────────────────────────────────────────
-
-function sizeColor(value: number | null): string {
-  if (value === null || value === undefined) return 'bg-gray-100 text-gray-400';
-  if (value < 7)  return 'bg-green-100 text-green-700';
-  if (value <= 15) return 'bg-yellow-100 text-yellow-700';
-  return 'bg-red-100 text-red-700';
-}
-
-const REGULAR_SIZES: { key: keyof SkuReview; label: string }[] = [
-  { key: 'xs_return', label: 'XS' }, { key: 's_return', label: 'S' },
-  { key: 'm_return', label: 'M' },   { key: 'l_return', label: 'L' },
-  { key: 'xl_return', label: 'XL' }, { key: 'xxl_return', label: 'XXL' },
-];
-const PLUS_SIZES: { key: keyof SkuReview; label: string }[] = [
-  { key: 'xl3_return', label: '3XL' }, { key: 'xl4_return', label: '4XL' },
-  { key: 'xl5_return', label: '5XL' }, { key: 'xl6_return', label: '6XL' },
-];
-
-// ─── Size chart ──────────────────────────────────────────────────────────────
+// ─── Size chart ───────────────────────────────────────────────────────────────
 
 const TOP_WEAR_SIZES    = ['XS','S','M','L','XL','XXL','3XL','4XL','5XL','6XL'];
 const TOP_WEAR_MEAS     = ['Chest','Length','Shoulders','Sleeve'];
@@ -51,7 +32,32 @@ function buildEmptyChart(sizes: string[], meas: string[]): SizeChartData {
   return c;
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
+// ─── Size data per size ───────────────────────────────────────────────────────
+
+type SizeEntry = {
+  label: string;
+  returnKey: keyof SkuReview;
+  tooBigKey: keyof SkuReview;
+  tooSmallKey: keyof SkuReview;
+};
+
+const REGULAR_SIZES: SizeEntry[] = [
+  { label: 'XS',  returnKey: 'xs_return',  tooBigKey: 'xs_too_big',  tooSmallKey: 'xs_too_small' },
+  { label: 'S',   returnKey: 's_return',   tooBigKey: 's_too_big',   tooSmallKey: 's_too_small' },
+  { label: 'M',   returnKey: 'm_return',   tooBigKey: 'm_too_big',   tooSmallKey: 'm_too_small' },
+  { label: 'L',   returnKey: 'l_return',   tooBigKey: 'l_too_big',   tooSmallKey: 'l_too_small' },
+  { label: 'XL',  returnKey: 'xl_return',  tooBigKey: 'xl_too_big',  tooSmallKey: 'xl_too_small' },
+  { label: 'XXL', returnKey: 'xxl_return', tooBigKey: 'xxl_too_big', tooSmallKey: 'xxl_too_small' },
+];
+
+const PLUS_SIZES: SizeEntry[] = [
+  { label: '3XL', returnKey: 'xl3_return', tooBigKey: 'xl3_too_big', tooSmallKey: 'xl3_too_small' },
+  { label: '4XL', returnKey: 'xl4_return', tooBigKey: 'xl4_too_big', tooSmallKey: 'xl4_too_small' },
+  { label: '5XL', returnKey: 'xl5_return', tooBigKey: 'xl5_too_big', tooSmallKey: 'xl5_too_small' },
+  { label: '6XL', returnKey: 'xl6_return', tooBigKey: 'xl6_too_big', tooSmallKey: 'xl6_too_small' },
+];
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function CheckboxRow({
   label, hint, checked, onChange,
@@ -134,28 +140,42 @@ function SizeChartMatrix({
   );
 }
 
-// ─── Auto-advance preview (mirrors server logic) ──────────────────────────────
+// ─── Fit metrics cell ─────────────────────────────────────────────────────────
+
+function FitBadge({ label, value, color }: { label: string; value: number | null; color: string }) {
+  return (
+    <div className={`flex flex-col items-center rounded-lg px-2 py-1.5 min-w-[48px] ${color}`}>
+      <span className="text-[10px] font-bold uppercase tracking-wide opacity-70">{label}</span>
+      <span className="text-sm font-bold leading-tight">{value != null ? `${value}%` : '—'}</span>
+    </div>
+  );
+}
+
+// ─── Auto-advance preview ─────────────────────────────────────────────────────
 
 function computePreviewStatus(form: any, sku: SkuReview): ReviewStatus | null {
   const s = form.review_status as ReviewStatus;
+  if (s === 'qc' && form.sample_required === true && sku.sample_at_hq !== true) return 'warehouse';
   if (s === 'warehouse' && form.sample_order_created && form.sample_at_hq) return 'qc';
-  if (s === 'qc' &&
-      form.size_check === true && form.fit_trial_done === true &&
-      form.size_issue_found !== null && form.need_size_chart_updation !== null &&
-      form.debit_note_raised !== null && form.remarks.trim() !== '') {
-    return 'catalog';
-  }
-  if (s === 'catalog' &&
-      form.description_updated !== null &&
-      (form.description_updated === false || form.description_update_notes.trim() !== '')) {
-    return sku.need_size_chart_updation === true ? 'tech' : 'completed';
-  }
+  if (
+    s === 'qc' &&
+    form.sample_required !== null &&
+    (form.sample_required === false || sku.sample_at_hq === true) &&
+    form.size_check === true && form.fit_trial_done === true &&
+    form.need_size_chart_updation !== null &&
+    form.debit_note_raised !== null && form.remarks.trim() !== ''
+  ) return 'catalog';
+  if (
+    s === 'catalog' &&
+    form.description_updated !== null &&
+    (form.description_updated === false || form.description_update_notes.trim() !== '')
+  ) return sku.need_size_chart_updation === true ? 'tech' : 'completed';
   if (s === 'tech' && form.size_chart_updated) return 'completed';
   return null;
 }
 
 const STATUS_DISPLAY: Partial<Record<ReviewStatus, string>> = {
-  qc: 'QC', catalog: 'Catalog', tech: 'Tech', completed: 'Completed',
+  warehouse: 'Warehouse', qc: 'QC', catalog: 'Catalog', tech: 'Tech', completed: 'Completed',
 };
 
 // ─── Main modal ───────────────────────────────────────────────────────────────
@@ -173,9 +193,9 @@ export default function EditModal({ sku, saving, userRole, onClose, onSave }: Pr
     sample_order_created:     sku.sample_order_created ?? false,
     sample_at_hq:             sku.sample_at_hq ?? false,
     // QC
+    sample_required:          sku.sample_required ?? false,
     size_check:               sku.size_check,
     fit_trial_done:           sku.fit_trial_done,
-    size_issue_found:         sku.size_issue_found,
     need_size_chart_updation: sku.need_size_chart_updation,
     size_chart_update:        (sku.size_chart_update && Object.keys(sku.size_chart_update).length > 0)
                                 ? sku.size_chart_update as SizeChartData
@@ -199,9 +219,6 @@ export default function EditModal({ sku, saving, userRole, onClose, onSave }: Pr
 
   const set = (field: string) => (v: unknown) => setForm((prev) => ({ ...prev, [field]: v }));
 
-  const returnSizes = isPlus ? PLUS_SIZES : REGULAR_SIZES;
-  const hasSizeData = returnSizes.some((s) => sku[s.key] !== null && sku[s.key] !== undefined);
-
   const handleGarmentTypeChange = (type: 'top'|'bottom') => {
     setGarmentType(type);
     const ns = type === 'bottom' ? BOTTOM_WEAR_SIZES : TOP_WEAR_SIZES;
@@ -209,9 +226,10 @@ export default function EditModal({ sku, saving, userRole, onClose, onSave }: Pr
     setForm((prev) => ({ ...prev, size_chart_update: buildEmptyChart(ns, nm) }));
   };
 
+  const sizeSeries = isPlus ? PLUS_SIZES : REGULAR_SIZES;
+
   const autoStatus = userRole !== 'admin' ? computePreviewStatus(form, sku) : null;
 
-  // Role visibility helpers
   const showWarehouse = userRole === 'admin' || userRole === 'warehouse';
   const showQC        = userRole === 'admin' || userRole === 'qc';
   const showCatalog   = userRole === 'admin' || userRole === 'catalog';
@@ -241,10 +259,15 @@ export default function EditModal({ sku, saving, userRole, onClose, onSave }: Pr
             </div>
             <p className="text-gray-500 text-sm">{sku.category ?? '—'}</p>
             {sku.vendor && <p className="text-gray-400 text-xs mt-0.5">{sku.vendor}</p>}
-            <div className="flex gap-4 mt-1.5 text-sm">
+            <div className="flex flex-wrap gap-3 mt-1.5 text-sm">
               <span className="font-semibold text-red-600">Returns: {sku.return_pct != null ? `${sku.return_pct}%` : 'N/A'}</span>
+              {sku.size_too_small != null && (
+                <span className="font-semibold text-orange-500">Too Small: {sku.size_too_small}%</span>
+              )}
+              {sku.size_too_big != null && (
+                <span className="font-semibold text-blue-500">Too Big: {sku.size_too_big}%</span>
+              )}
               <span className="text-gray-500">Online: {sku.online_inventory?.toLocaleString() ?? 'N/A'}</span>
-              {sku.total_inventory != null && <span className="text-gray-400">Total: {sku.total_inventory.toLocaleString()}</span>}
             </div>
           </div>
           <button onClick={onClose} className="text-gray-300 hover:text-gray-600 text-3xl leading-none flex-shrink-0 -mt-1">×</button>
@@ -256,7 +279,7 @@ export default function EditModal({ sku, saving, userRole, onClose, onSave }: Pr
           if (userRole === 'warehouse') {
             payload = { sample_order_created: form.sample_order_created, sample_at_hq: form.sample_at_hq };
           } else if (userRole === 'qc') {
-            payload = { size_check: form.size_check, fit_trial_done: form.fit_trial_done, size_issue_found: form.size_issue_found, need_size_chart_updation: form.need_size_chart_updation, debit_note_raised: form.debit_note_raised, remarks: form.remarks, size_chart_update: form.size_chart_update };
+            payload = { sample_required: form.sample_required, size_check: form.size_check, fit_trial_done: form.fit_trial_done, need_size_chart_updation: form.need_size_chart_updation, debit_note_raised: form.debit_note_raised, remarks: form.remarks, size_chart_update: form.size_chart_update };
           } else if (userRole === 'catalog') {
             payload = { description_updated: form.description_updated, description_update_notes: form.description_update_notes };
           } else if (userRole === 'tech') {
@@ -267,32 +290,6 @@ export default function EditModal({ sku, saving, userRole, onClose, onSave }: Pr
           await onSave(sku.id, payload);
         }}>
           <div className="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
-
-            {/* ── Size-wise Returns (QC & admin) ── */}
-            {showQC && hasSizeData && (
-              <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-                  Size-wise Return %
-                  <span className="ml-2 font-normal normal-case text-gray-300">({isPlus ? '3XL – 6XL' : 'XS – XXL'})</span>
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {returnSizes.map(({ key, label }) => {
-                    const val = sku[key] as number | null;
-                    return (
-                      <div key={key} className={`flex flex-col items-center rounded-xl px-4 py-2.5 min-w-[56px] ${sizeColor(val)}`}>
-                        <span className="text-xs font-bold">{label}</span>
-                        <span className="text-lg font-bold leading-tight">{val != null ? `${val}%` : '—'}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="flex gap-3 mt-3 text-xs text-gray-400">
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-400 inline-block" />Below 7%</span>
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block" />7–15%</span>
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-400 inline-block" />Above 15%</span>
-                </div>
-              </div>
-            )}
 
             {/* ── Status (admin only) ── */}
             {userRole === 'admin' && (
@@ -343,12 +340,67 @@ export default function EditModal({ sku, saving, userRole, onClose, onSave }: Pr
             {showQC && (
               <div className="bg-blue-50 rounded-xl p-4">
                 <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">QC Checks</p>
+
+                {/* Sample Required — top checkbox */}
+                <CheckboxRow
+                  label="Sample Required"
+                  hint="Does this SKU need a physical sample for inspection? Ticking this sends it to Warehouse."
+                  checked={form.sample_required}
+                  onChange={(v) => set('sample_required')(v)}
+                />
+
+                {/* Size data grid — shown when sample is required */}
+                {form.sample_required && (
+                  <div className="mt-3 bg-white rounded-xl p-3 border border-blue-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-bold text-blue-600 uppercase tracking-wider">Size Fit Data</p>
+                      <div className="flex gap-1">
+                        {(['top','bottom'] as const).map((t) => (
+                          <button key={t} type="button" onClick={() => setGarmentType(t)}
+                            className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                              garmentType === t ? 'bg-blue-700 text-white border-blue-700' : 'bg-white text-blue-700 border-blue-200 hover:border-blue-400'
+                            }`}>
+                            {t === 'top' ? 'Top Wear' : 'Bottom Wear'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-gray-400 text-center">
+                            <th className="text-left pb-1.5 font-semibold">Size</th>
+                            <th className="pb-1.5 font-semibold">Return %</th>
+                            <th className="pb-1.5 font-semibold text-blue-500">Too Big %</th>
+                            <th className="pb-1.5 font-semibold text-orange-500">Too Small %</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sizeSeries.map(({ label, returnKey, tooBigKey, tooSmallKey }) => {
+                            const ret     = sku[returnKey] as number | null;
+                            const tooBig  = sku[tooBigKey] as number | null;
+                            const tooSmall = sku[tooSmallKey] as number | null;
+                            if (ret == null && tooBig == null && tooSmall == null) return null;
+                            return (
+                              <tr key={label} className="border-t border-blue-50">
+                                <td className="py-1.5 font-bold text-gray-700">{label}</td>
+                                <td className="py-1.5 text-center text-red-600 font-semibold">{ret != null ? `${ret}%` : '—'}</td>
+                                <td className="py-1.5 text-center text-blue-600 font-semibold">{tooBig != null ? `${tooBig}%` : '—'}</td>
+                                <td className="py-1.5 text-center text-orange-600 font-semibold">{tooSmall != null ? `${tooSmall}%` : '—'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Rest of QC checks */}
                 <YesNoToggle label="Size Check Done" hint="Has the size labelling been physically verified?" value={form.size_check} onChange={set('size_check')} />
                 <YesNoToggle label="Fit Trial Completed" hint="Was the garment physically tried on to check fit?" value={form.fit_trial_done} onChange={set('fit_trial_done')} />
-                <YesNoToggle label="Size Issue Found" hint="Was a size discrepancy or problem identified?" value={form.size_issue_found} onChange={set('size_issue_found')} />
                 <YesNoToggle label="Need Size Chart Updation" hint="Does the size chart need to be updated by the tech team?" value={form.need_size_chart_updation} onChange={set('need_size_chart_updation')} />
                 <YesNoToggle label="Debit Note Raised" hint="Has a debit note been raised for this SKU?" value={form.debit_note_raised} onChange={set('debit_note_raised')} />
-                {/* Remarks */}
                 <div className="pt-3">
                   <label className="block text-xs font-semibold text-blue-500 mb-1.5">Remarks</label>
                   <textarea
@@ -362,8 +414,8 @@ export default function EditModal({ sku, saving, userRole, onClose, onSave }: Pr
               </div>
             )}
 
-            {/* ── Size chart matrix (when size issue found = yes) ── */}
-            {showQC && form.size_issue_found === true && (
+            {/* ── Size chart matrix (when size chart updation needed) ── */}
+            {showQC && form.need_size_chart_updation === true && (
               <div className="bg-sky-50 border border-sky-100 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-bold text-sky-700 uppercase tracking-wider">Size Chart Update</p>
@@ -387,11 +439,10 @@ export default function EditModal({ sku, saving, userRole, onClose, onSave }: Pr
               </div>
             )}
 
-            {/* ── Tech section (read-only size chart from QC + size_chart_updated) ── */}
+            {/* ── Tech section ── */}
             {showTech && (
               <div className="bg-pink-50 rounded-xl p-4">
                 <p className="text-xs font-bold text-pink-400 uppercase tracking-wider mb-2">Tech</p>
-                {/* Show QC's size chart data if available */}
                 {sku.size_chart_update && Object.keys(sku.size_chart_update).length > 0 && (
                   <div className="mb-3">
                     <p className="text-xs text-pink-600 font-semibold mb-2">Size chart entered by QC:</p>

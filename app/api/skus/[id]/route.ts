@@ -6,7 +6,7 @@ import { ReviewStatus } from '@/types';
 
 const ROLE_ALLOWED_FIELDS: Record<string, string[]> = {
   warehouse: ['sample_order_created', 'sample_at_hq'],
-  qc:        ['size_check', 'fit_trial_done', 'size_issue_found', 'need_size_chart_updation', 'debit_note_raised', 'remarks', 'size_chart_update'],
+  qc:        ['sample_required', 'size_check', 'fit_trial_done', 'need_size_chart_updation', 'debit_note_raised', 'remarks', 'size_chart_update'],
   catalog:   ['description_updated', 'description_update_notes'],
   tech:      ['size_chart_updated'],
   admin:     ['*'],
@@ -15,20 +15,30 @@ const ROLE_ALLOWED_FIELDS: Record<string, string[]> = {
 function computeAutoStatus(row: any): ReviewStatus {
   const s = row.review_status as ReviewStatus;
 
+  // QC: sample required but not yet received → send to warehouse
+  if (s === 'qc' && row.sample_required === true && row.sample_at_hq !== true) {
+    return 'warehouse';
+  }
+
+  // Warehouse: sample received → send back to QC
   if (s === 'warehouse' && row.sample_order_created === true && row.sample_at_hq === true) {
     return 'qc';
   }
+
+  // QC complete (sample not required OR sample already at HQ) → catalog
   if (
     s === 'qc' &&
+    row.sample_required !== null && row.sample_required !== undefined &&
+    (row.sample_required === false || row.sample_at_hq === true) &&
     row.size_check === true &&
     row.fit_trial_done === true &&
-    row.size_issue_found !== null && row.size_issue_found !== undefined &&
     row.need_size_chart_updation !== null && row.need_size_chart_updation !== undefined &&
     row.debit_note_raised !== null && row.debit_note_raised !== undefined &&
     row.remarks && String(row.remarks).trim() !== ''
   ) {
     return 'catalog';
   }
+
   if (
     s === 'catalog' &&
     row.description_updated !== null && row.description_updated !== undefined &&
@@ -36,9 +46,11 @@ function computeAutoStatus(row: any): ReviewStatus {
   ) {
     return row.need_size_chart_updation === true ? 'tech' : 'completed';
   }
+
   if (s === 'tech' && row.size_chart_updated === true) {
     return 'completed';
   }
+
   return s;
 }
 
@@ -59,7 +71,6 @@ export async function PATCH(
   try {
     const body = await request.json();
 
-    // Filter body to only fields this role can write
     const allowedFields = ROLE_ALLOWED_FIELDS[userRole] ?? [];
     const filteredBody: Record<string, unknown> = {};
     if (allowedFields[0] === '*') {
@@ -70,14 +81,12 @@ export async function PATCH(
       }
     }
 
-    // Fetch current row
     const current = await pool.query('SELECT * FROM sku_reviews WHERE id = $1', [id]);
     if (current.rows.length === 0) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
     const currentRow = current.rows[0];
 
-    // Merge allowed updates onto current values
     const merged = { ...currentRow, ...filteredBody };
 
     const autoAdvanced = computeAutoStatus(merged);
@@ -87,45 +96,44 @@ export async function PATCH(
       'review_status' in filteredBody &&
       filteredBody.review_status !== currentRow.review_status
     ) {
-      // Admin explicitly changed the status dropdown — respect their override
       finalStatus = filteredBody.review_status as ReviewStatus;
     } else {
-      // Auto-advance for all roles (including admin who didn't change dropdown)
       finalStatus = autoAdvanced;
     }
 
-    const result = await pool.query(
+    await pool.query(
       `UPDATE sku_reviews SET
         sample_order_created     = $1,
         sample_at_hq             = $2,
-        size_check               = $3,
-        fit_trial_done           = $4,
-        size_issue_found         = $5,
-        need_size_chart_updation = $6,
-        size_chart_update        = $7,
-        debit_note_raised        = $8,
-        remarks                  = $9,
-        description_updated      = $10,
-        description_update_notes = $11,
-        size_chart_updated       = $12,
-        review_status            = $13,
-        last_updated_by          = $14,
+        sample_required          = $3,
+        size_check               = $4,
+        fit_trial_done           = $5,
+        size_issue_found         = $6,
+        need_size_chart_updation = $7,
+        size_chart_update        = $8,
+        debit_note_raised        = $9,
+        remarks                  = $10,
+        description_updated      = $11,
+        description_update_notes = $12,
+        size_chart_updated       = $13,
+        review_status            = $14,
+        last_updated_by          = $15,
         last_updated_at          = NOW()
-       WHERE id = $15
-       RETURNING *`,
+       WHERE id = $16`,
       [
-        merged.sample_order_created ?? null,
-        merged.sample_at_hq         ?? null,
-        merged.size_check            ?? null,
-        merged.fit_trial_done        ?? null,
-        merged.size_issue_found      ?? null,
+        merged.sample_order_created  ?? null,
+        merged.sample_at_hq          ?? null,
+        merged.sample_required        ?? null,
+        merged.size_check             ?? null,
+        merged.fit_trial_done         ?? null,
+        merged.size_issue_found       ?? null,
         merged.need_size_chart_updation ?? null,
         merged.size_chart_update ? JSON.stringify(merged.size_chart_update) : null,
-        merged.debit_note_raised     ?? null,
-        merged.remarks               ?? null,
-        merged.description_updated   ?? null,
+        merged.debit_note_raised      ?? null,
+        merged.remarks                ?? null,
+        merged.description_updated    ?? null,
         merged.description_update_notes ?? null,
-        merged.size_chart_updated    ?? null,
+        merged.size_chart_updated     ?? null,
         finalStatus,
         userId,
         id,

@@ -57,7 +57,7 @@ with open(csv_path, newline='', encoding='utf-8-sig') as f:
         image_url = extract_image_url(row.get('IMAGE', ''))
         vendor    = (row.get('VENDOR') or '').strip() or None
         category  = (row.get('CATEGORY') or '').strip() or None
-        l1        = (row.get('l1-category') or '').strip() or None
+        l1        = (row.get('L1_CATEGORY') or '').strip() or None
 
         rows.append({
             "sku_group":        row['SKU_GROUP'].strip(),
@@ -69,19 +69,44 @@ with open(csv_path, newline='', encoding='utf-8-sig') as f:
             "total_inventory":  to_int(row.get('TOTAL_INVENTORY')),
             "image_url":        image_url,
             "type":             "repeat",
-            "xs_return":        to_int(row.get('XS_RETURN')),
-            "s_return":         to_int(row.get('S_RETURN')),
-            "m_return":         to_int(row.get('M_RETURN')),
-            "l_return":         to_int(row.get('L_RETURN')),
-            "xl_return":        to_int(row.get('XL_RETURN')),
-            "xxl_return":       to_int(row.get('XXL_RETURN')),
-            "xl3_return":       to_int(row.get('XL3_RETURN')),
-            "xl4_return":       to_int(row.get('XL4_RETURN')),
-            "xl5_return":       to_int(row.get('XL5_RETURN')),
-            "xl6_return":       to_int(row.get('XL6_RETURN')),
+            # Return % per size
+            "xs_return":        to_num(row.get('XS_RETURN')),
+            "s_return":         to_num(row.get('S_RETURN')),
+            "m_return":         to_num(row.get('M_RETURN')),
+            "l_return":         to_num(row.get('L_RETURN')),
+            "xl_return":        to_num(row.get('XL_RETURN')),
+            "xxl_return":       to_num(row.get('XXL_RETURN')),
+            "xl3_return":       to_num(row.get('XL3_RETURN')),
+            "xl4_return":       to_num(row.get('XL4_RETURN')),
+            "xl5_return":       to_num(row.get('XL5_RETURN')),
+            "xl6_return":       to_num(row.get('XL6_RETURN')),
+            # SKU-level fit metrics
+            "size_too_big":     to_num(row.get('SIZE_TOO_BIG')),
+            "size_too_small":   to_num(row.get('SIZE_TOO_SMALL')),
+            # Per-size fit metrics
+            "xs_too_big":       to_num(row.get('XS_TOO_BIG')),
+            "xs_too_small":     to_num(row.get('XS_TOO_SMALL')),
+            "s_too_big":        to_num(row.get('S_TOO_BIG')),
+            "s_too_small":      to_num(row.get('S_TOO_SMALL')),
+            "m_too_big":        to_num(row.get('M_TOO_BIG')),
+            "m_too_small":      to_num(row.get('M_TOO_SMALL')),
+            "l_too_big":        to_num(row.get('L_TOO_BIG')),
+            "l_too_small":      to_num(row.get('L_TOO_SMALL')),
+            "xl_too_big":       to_num(row.get('XL_TOO_BIG')),
+            "xl_too_small":     to_num(row.get('XL_TOO_SMALL')),
+            "xxl_too_big":      to_num(row.get('XXL_TOO_BIG')),
+            "xxl_too_small":    to_num(row.get('XXL_TOO_SMALL')),
+            "xl3_too_big":      to_num(row.get('XL3_TOO_BIG')),
+            "xl3_too_small":    to_num(row.get('XL3_TOO_SMALL')),
+            "xl4_too_big":      to_num(row.get('XL4_TOO_BIG')),
+            "xl4_too_small":    to_num(row.get('XL4_TOO_SMALL')),
+            "xl5_too_big":      to_num(row.get('XL5_TOO_BIG')),
+            "xl5_too_small":    to_num(row.get('XL5_TOO_SMALL')),
+            "xl6_too_big":      to_num(row.get('XL6_TOO_BIG')),
+            "xl6_too_small":    to_num(row.get('XL6_TOO_SMALL')),
         })
 
-print(f"Parsed {len(rows)} rows (≥10% return rate). Sending to API...")
+print(f"Parsed {len(rows)} rows (>=10% return rate). Sending to API...")
 
 # ── Step 3: Insert ────────────────────────────────────────────────────────────
 payload = json.dumps(rows).encode('utf-8')

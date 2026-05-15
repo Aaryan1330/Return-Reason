@@ -52,11 +52,28 @@ export interface SkuReview {
   xl5_return: number | null;
   xl6_return: number | null;
 
+  // SKU-level fit metrics (from CSV)
+  size_too_big: number | null;
+  size_too_small: number | null;
+
+  // Per-size fit metrics (from CSV)
+  xs_too_big: number | null;  xs_too_small: number | null;
+  s_too_big: number | null;   s_too_small: number | null;
+  m_too_big: number | null;   m_too_small: number | null;
+  l_too_big: number | null;   l_too_small: number | null;
+  xl_too_big: number | null;  xl_too_small: number | null;
+  xxl_too_big: number | null; xxl_too_small: number | null;
+  xl3_too_big: number | null; xl3_too_small: number | null;
+  xl4_too_big: number | null; xl4_too_small: number | null;
+  xl5_too_big: number | null; xl5_too_small: number | null;
+  xl6_too_big: number | null; xl6_too_small: number | null;
+
   // Warehouse
   sample_order_created: boolean | null;
   sample_at_hq: boolean | null;
 
   // QC
+  sample_required: boolean | null;
   size_check: boolean | null;
   fit_trial_done: boolean | null;
   size_issue_found: boolean | null;

@@ -30,11 +30,41 @@ export async function POST(request: NextRequest) {
     `CREATE INDEX IF NOT EXISTS idx_sku_reviews_type ON sku_reviews(type)`,
     `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS size_chart_update JSONB`,
 
-    // New workflow columns
+    // Workflow columns
     `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS sample_order_created BOOLEAN`,
     `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS sample_at_hq BOOLEAN`,
     `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS need_size_chart_updation BOOLEAN`,
     `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS size_chart_updated BOOLEAN`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS sample_required BOOLEAN`,
+
+    // SKU-level fit metrics
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS size_too_big NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS size_too_small NUMERIC`,
+
+    // Per-size fit metrics
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS xs_too_big NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS xs_too_small NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS s_too_big NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS s_too_small NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS m_too_big NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS m_too_small NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS l_too_big NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS l_too_small NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS xl_too_big NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS xl_too_small NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS xxl_too_big NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS xxl_too_small NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS xl3_too_big NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS xl3_too_small NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS xl4_too_big NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS xl4_too_small NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS xl5_too_big NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS xl5_too_small NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS xl6_too_big NUMERIC`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS xl6_too_small NUMERIC`,
+
+    // Reset existing warehouse-status SKUs to qc (new default starting point)
+    `UPDATE sku_reviews SET review_status = 'qc' WHERE review_status = 'warehouse' AND type = 'repeat'`,
 
     // Role on users
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'admin'`,
