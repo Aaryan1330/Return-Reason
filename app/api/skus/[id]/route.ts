@@ -5,8 +5,8 @@ import pool from '@/lib/db';
 import { ReviewStatus } from '@/types';
 
 const ROLE_ALLOWED_FIELDS: Record<string, string[]> = {
-  warehouse: ['sample_order_created', 'sample_at_hq'],
-  qc:        ['sample_required', 'size_check', 'fit_trial_done', 'need_size_chart_updation', 'debit_note_raised', 'remarks', 'size_chart_update'],
+  warehouse: ['sample_at_hq'],
+  qc:        ['sample_required', 'sizes_to_order', 'sample_order_created', 'size_check', 'fit_trial_done', 'need_size_chart_updation', 'debit_note_raised', 'remarks', 'size_chart_update'],
   catalog:   ['description_updated', 'description_update_notes'],
   tech:      ['size_chart_updated'],
   admin:     ['*'],
@@ -15,13 +15,13 @@ const ROLE_ALLOWED_FIELDS: Record<string, string[]> = {
 function computeAutoStatus(row: any): ReviewStatus {
   const s = row.review_status as ReviewStatus;
 
-  // QC: sample required but not yet received → send to warehouse
-  if (s === 'qc' && row.sample_required === true && row.sample_at_hq !== true) {
+  // QC: sample required AND order placed → send to warehouse
+  if (s === 'qc' && row.sample_required === true && row.sample_order_created === true && row.sample_at_hq !== true) {
     return 'warehouse';
   }
 
   // Warehouse: sample received → send back to QC
-  if (s === 'warehouse' && row.sample_order_created === true && row.sample_at_hq === true) {
+  if (s === 'warehouse' && row.sample_at_hq === true) {
     return 'qc';
   }
 
@@ -103,27 +103,29 @@ export async function PATCH(
 
     await pool.query(
       `UPDATE sku_reviews SET
-        sample_order_created     = $1,
-        sample_at_hq             = $2,
-        sample_required          = $3,
-        size_check               = $4,
-        fit_trial_done           = $5,
-        size_issue_found         = $6,
-        need_size_chart_updation = $7,
-        size_chart_update        = $8,
-        debit_note_raised        = $9,
-        remarks                  = $10,
-        description_updated      = $11,
-        description_update_notes = $12,
-        size_chart_updated       = $13,
-        review_status            = $14,
-        last_updated_by          = $15,
+        sample_at_hq             = $1,
+        sample_required          = $2,
+        sizes_to_order           = $3,
+        sample_order_created     = $4,
+        size_check               = $5,
+        fit_trial_done           = $6,
+        size_issue_found         = $7,
+        need_size_chart_updation = $8,
+        size_chart_update        = $9,
+        debit_note_raised        = $10,
+        remarks                  = $11,
+        description_updated      = $12,
+        description_update_notes = $13,
+        size_chart_updated       = $14,
+        review_status            = $15,
+        last_updated_by          = $16,
         last_updated_at          = NOW()
-       WHERE id = $16`,
+       WHERE id = $17`,
       [
-        merged.sample_order_created  ?? null,
-        merged.sample_at_hq          ?? null,
-        merged.sample_required        ?? null,
+        merged.sample_at_hq           ?? null,
+        merged.sample_required         ?? null,
+        merged.sizes_to_order ? JSON.stringify(merged.sizes_to_order) : null,
+        merged.sample_order_created   ?? null,
         merged.size_check             ?? null,
         merged.fit_trial_done         ?? null,
         merged.size_issue_found       ?? null,

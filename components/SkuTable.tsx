@@ -45,9 +45,9 @@ export default function SkuTable({ skus, userRole, onEdit }: Props) {
               <th className="text-left px-4 py-3 font-semibold">Vendor</th>
               <th className="text-right px-4 py-3 font-semibold">Return %</th>
               <th className="text-right px-4 py-3 font-semibold">Online Inv.</th>
-              {showWarehouse && <th className="text-center px-3 py-3 font-semibold">Sample Order</th>}
               {showWarehouse && <th className="text-center px-3 py-3 font-semibold">Sample at HQ</th>}
               {showQC && <th className="text-center px-3 py-3 font-semibold">Sample Req.</th>}
+              {showQC && <th className="text-center px-3 py-3 font-semibold">Sample Order</th>}
               {showQC && <th className="text-center px-3 py-3 font-semibold">Size Check</th>}
               {showQC && <th className="text-center px-3 py-3 font-semibold">Fit Trial</th>}
               {showQC && <th className="text-center px-3 py-3 font-semibold">Debit Note</th>}
@@ -108,9 +108,9 @@ export default function SkuTable({ skus, userRole, onEdit }: Props) {
                   {sku.online_inventory != null ? sku.online_inventory.toLocaleString() : '—'}
                 </td>
 
-                {showWarehouse && <td className="px-3 py-3 text-center"><BoolCell value={sku.sample_order_created} /></td>}
                 {showWarehouse && <td className="px-3 py-3 text-center"><BoolCell value={sku.sample_at_hq} /></td>}
                 {showQC && <td className="px-3 py-3 text-center"><BoolCell value={sku.sample_required} /></td>}
+                {showQC && <td className="px-3 py-3 text-center"><BoolCell value={sku.sample_order_created} /></td>}
                 {showQC && <td className="px-3 py-3 text-center"><BoolCell value={sku.size_check} /></td>}
                 {showQC && <td className="px-3 py-3 text-center"><BoolCell value={sku.fit_trial_done} /></td>}
                 {showQC && <td className="px-3 py-3 text-center"><BoolCell value={sku.debit_note_raised} /></td>}

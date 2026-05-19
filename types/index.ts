@@ -69,11 +69,12 @@ export interface SkuReview {
   xl6_too_big: number | null; xl6_too_small: number | null;
 
   // Warehouse
-  sample_order_created: boolean | null;
   sample_at_hq: boolean | null;
 
   // QC
   sample_required: boolean | null;
+  sizes_to_order: Record<string, boolean> | null;
+  sample_order_created: boolean | null;
   size_check: boolean | null;
   fit_trial_done: boolean | null;
   size_issue_found: boolean | null;

@@ -155,8 +155,8 @@ function FitBadge({ label, value, color }: { label: string; value: number | null
 
 function computePreviewStatus(form: any, sku: SkuReview): ReviewStatus | null {
   const s = form.review_status as ReviewStatus;
-  if (s === 'qc' && form.sample_required === true && sku.sample_at_hq !== true) return 'warehouse';
-  if (s === 'warehouse' && form.sample_order_created && form.sample_at_hq) return 'qc';
+  if (s === 'qc' && form.sample_required === true && form.sample_order_created === true && sku.sample_at_hq !== true) return 'warehouse';
+  if (s === 'warehouse' && form.sample_at_hq) return 'qc';
   if (
     s === 'qc' &&
     form.sample_required !== null &&
@@ -190,10 +190,11 @@ export default function EditModal({ sku, saving, userRole, onClose, onSave }: Pr
 
   const [form, setForm] = useState({
     // Warehouse
-    sample_order_created:     sku.sample_order_created ?? false,
     sample_at_hq:             sku.sample_at_hq ?? false,
     // QC
     sample_required:          sku.sample_required ?? false,
+    sizes_to_order:           (sku.sizes_to_order ?? {}) as Record<string, boolean>,
+    sample_order_created:     sku.sample_order_created ?? false,
     size_check:               sku.size_check,
     fit_trial_done:           sku.fit_trial_done,
     need_size_chart_updation: sku.need_size_chart_updation,
@@ -277,9 +278,9 @@ export default function EditModal({ sku, saving, userRole, onClose, onSave }: Pr
           e.preventDefault();
           let payload: Partial<SkuReview>;
           if (userRole === 'warehouse') {
-            payload = { sample_order_created: form.sample_order_created, sample_at_hq: form.sample_at_hq };
+            payload = { sample_at_hq: form.sample_at_hq };
           } else if (userRole === 'qc') {
-            payload = { sample_required: form.sample_required, size_check: form.size_check, fit_trial_done: form.fit_trial_done, need_size_chart_updation: form.need_size_chart_updation, debit_note_raised: form.debit_note_raised, remarks: form.remarks, size_chart_update: form.size_chart_update };
+            payload = { sample_required: form.sample_required, sizes_to_order: form.sizes_to_order, sample_order_created: form.sample_order_created, size_check: form.size_check, fit_trial_done: form.fit_trial_done, need_size_chart_updation: form.need_size_chart_updation, debit_note_raised: form.debit_note_raised, remarks: form.remarks, size_chart_update: form.size_chart_update };
           } else if (userRole === 'catalog') {
             payload = { description_updated: form.description_updated, description_update_notes: form.description_update_notes };
           } else if (userRole === 'tech') {
@@ -322,12 +323,6 @@ export default function EditModal({ sku, saving, userRole, onClose, onSave }: Pr
               <div className="bg-orange-50 rounded-xl p-4">
                 <p className="text-xs font-bold text-orange-400 uppercase tracking-wider mb-1">Warehouse</p>
                 <CheckboxRow
-                  label="Sample Order Created"
-                  hint="Has the sample order been placed with the vendor?"
-                  checked={form.sample_order_created}
-                  onChange={(v) => set('sample_order_created')(v)}
-                />
-                <CheckboxRow
                   label="Sample at HQ"
                   hint="Has the physical sample arrived at headquarters?"
                   checked={form.sample_at_hq}
@@ -349,11 +344,11 @@ export default function EditModal({ sku, saving, userRole, onClose, onSave }: Pr
                   onChange={(v) => set('sample_required')(v)}
                 />
 
-                {/* Size data grid — shown when sample is required */}
+                {/* Size data grid with order checkboxes — shown when sample is required */}
                 {form.sample_required && (
                   <div className="mt-3 bg-white rounded-xl p-3 border border-blue-100">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-bold text-blue-600 uppercase tracking-wider">Size Fit Data</p>
+                      <p className="text-xs font-bold text-blue-600 uppercase tracking-wider">Select Sizes to Order</p>
                       <div className="flex gap-1">
                         {(['top','bottom'] as const).map((t) => (
                           <button key={t} type="button" onClick={() => setGarmentType(t)}
@@ -368,30 +363,49 @@ export default function EditModal({ sku, saving, userRole, onClose, onSave }: Pr
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="text-gray-400 text-center">
+                          <tr className="text-gray-400">
+                            <th className="text-left pb-1.5 font-semibold w-8">Order</th>
                             <th className="text-left pb-1.5 font-semibold">Size</th>
-                            <th className="pb-1.5 font-semibold">Return %</th>
-                            <th className="pb-1.5 font-semibold text-blue-500">Too Big %</th>
-                            <th className="pb-1.5 font-semibold text-orange-500">Too Small %</th>
+                            <th className="pb-1.5 font-semibold text-center">Return %</th>
+                            <th className="pb-1.5 font-semibold text-center text-blue-500">Too Big %</th>
+                            <th className="pb-1.5 font-semibold text-center text-orange-500">Too Small %</th>
                           </tr>
                         </thead>
                         <tbody>
                           {sizeSeries.map(({ label, returnKey, tooBigKey, tooSmallKey }) => {
-                            const ret     = sku[returnKey] as number | null;
-                            const tooBig  = sku[tooBigKey] as number | null;
+                            const ret      = sku[returnKey]   as number | null;
+                            const tooBig   = sku[tooBigKey]   as number | null;
                             const tooSmall = sku[tooSmallKey] as number | null;
                             if (ret == null && tooBig == null && tooSmall == null) return null;
+                            const checked = !!form.sizes_to_order[label];
                             return (
-                              <tr key={label} className="border-t border-blue-50">
-                                <td className="py-1.5 font-bold text-gray-700">{label}</td>
-                                <td className="py-1.5 text-center text-red-600 font-semibold">{ret != null ? `${ret}%` : '—'}</td>
-                                <td className="py-1.5 text-center text-blue-600 font-semibold">{tooBig != null ? `${tooBig}%` : '—'}</td>
-                                <td className="py-1.5 text-center text-orange-600 font-semibold">{tooSmall != null ? `${tooSmall}%` : '—'}</td>
+                              <tr key={label} className="border-t border-blue-50 cursor-pointer hover:bg-blue-50/50"
+                                onClick={() => set('sizes_to_order')({ ...form.sizes_to_order, [label]: !checked })}>
+                                <td className="py-2">
+                                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
+                                    checked ? 'bg-blue-700 border-blue-700' : 'border-gray-300'
+                                  }`}>
+                                    {checked && <span className="text-white text-[8px] font-bold leading-none">✓</span>}
+                                  </div>
+                                </td>
+                                <td className="py-2 font-bold text-gray-700">{label}</td>
+                                <td className="py-2 text-center text-red-600 font-semibold">{ret != null ? `${ret}%` : '—'}</td>
+                                <td className="py-2 text-center text-blue-600 font-semibold">{tooBig != null ? `${tooBig}%` : '—'}</td>
+                                <td className="py-2 text-center text-orange-600 font-semibold">{tooSmall != null ? `${tooSmall}%` : '—'}</td>
                               </tr>
                             );
                           })}
                         </tbody>
                       </table>
+                    </div>
+                    {/* Sample Order Created — shown after sizes are selected */}
+                    <div className="mt-3 pt-3 border-t border-blue-100">
+                      <CheckboxRow
+                        label="Sample Order Created"
+                        hint="Tick after placing the order — status will move to Warehouse."
+                        checked={form.sample_order_created}
+                        onChange={(v) => set('sample_order_created')(v)}
+                      />
                     </div>
                   </div>
                 )}

@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS need_size_chart_updation BOOLEAN`,
     `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS size_chart_updated BOOLEAN`,
     `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS sample_required BOOLEAN`,
+    `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS sizes_to_order JSONB`,
 
     // SKU-level fit metrics
     `ALTER TABLE sku_reviews ADD COLUMN IF NOT EXISTS size_too_big NUMERIC`,
