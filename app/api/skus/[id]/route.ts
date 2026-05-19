@@ -25,6 +25,11 @@ function computeAutoStatus(row: any): ReviewStatus {
     return 'qc';
   }
 
+  // Warehouse: conditions that sent it here no longer met (sample not yet received) → revert to QC
+  if (s === 'warehouse' && row.sample_at_hq !== true && (row.sample_required !== true || row.sample_order_created !== true)) {
+    return 'qc';
+  }
+
   // QC complete (sample not required OR sample already at HQ) → catalog
   if (
     s === 'qc' &&
